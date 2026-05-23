@@ -13,7 +13,7 @@ export class ExamTemplate {
     version: number = 1; //Tá certo?
 
     @Column({name: 'schema_json', type: 'jsonb'})
-    schemaJson!: object;
+    schema!: object;
     
     @Column({default: true})
     active: boolean = true
