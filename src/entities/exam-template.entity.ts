@@ -6,7 +6,7 @@ export class ExamTemplate {
     @PrimaryGeneratedColumn()
     id!: number;
 
-    @Column({unique: true})
+    @Column()
     name!: string;
 
     @Column()
