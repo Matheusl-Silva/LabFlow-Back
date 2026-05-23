@@ -1,9 +1,10 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
 import { ExamTemplate } from "../entities/exam-template.entity";
 import { DataSource, Repository } from "typeorm";
 import { CreateExamTemplateDto } from "./dto/create-exam-template.dto";
 import { UpdateExamTemplateDto } from "./dto/update-exam-template.dto";
+import { CreateNewVersionExamTemplateDto } from "./dto/create-new-version-exam-template.dto";
 
 @Injectable()
 export class ExamTemplateService{
@@ -21,5 +22,20 @@ export class ExamTemplateService{
 
     async getById(id: number): Promise<ExamTemplate | null>{
         return this.repo.findOneBy({id});
+    }
+
+    async createNewVersion(id: number, dto: CreateNewVersionExamTemplateDto): Promise<ExamTemplate>{
+        return await this.dataSource.transaction(async ()=>{
+            const activeTemplate = await this.repo.findOneBy({id});
+            if(!activeTemplate) throw new NotFoundException('Exam template not found');
+
+            const updateDto: UpdateExamTemplateDto = {active: false};
+            await this.repo.update(id, updateDto);
+
+            const newVerstionDto: CreateExamTemplateDto = {...dto, name: activeTemplate.name, version: activeTemplate.version + 1};
+            const newTemplate = this.repo.create(newVerstionDto);
+
+            return this.repo.save(newTemplate);
+        });
     }
 }

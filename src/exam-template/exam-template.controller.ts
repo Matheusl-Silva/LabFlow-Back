@@ -3,6 +3,7 @@ import { ExamTemplateService } from "./exam-template.service";
 import { ExamTemplate } from "../entities/exam-template.entity";
 import { CreateExamTemplateDto } from "./dto/create-exam-template.dto";
 import { UpdateExamTemplateDto } from "./dto/update-exam-template.dto";
+import { CreateNewVersionExamTemplateDto } from "./dto/create-new-version-exam-template.dto";
 
 @Controller('/template')
 export class ExamTemplateController{
@@ -23,8 +24,8 @@ export class ExamTemplateController{
         return this.service.create(dto);
     }
 
-    /*@Post('/edit/:id')
-    async createNewVersion(@Param('id', ParseIntPipe) id: number, dto: UpdateExamTemplateDto): Promise<ExamTemplate>{
-        
-    }*/
+    @Post('/update/:id')
+    async createNewVersion(@Param('id', ParseIntPipe) id: number, @Body() dto: CreateNewVersionExamTemplateDto): Promise<ExamTemplate>{
+        return this.service.createNewVersion(id, dto);
+    }
 }

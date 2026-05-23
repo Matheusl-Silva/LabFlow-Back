@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from '@nestjs/class-validator';
+import { IsNotEmpty, IsInt, IsString } from '@nestjs/class-validator';
 import { IsSchema } from '../validators/exam-template.decorators';
 
 export class CreateExamTemplateDto {
@@ -8,4 +8,7 @@ export class CreateExamTemplateDto {
 
   @IsSchema()
   schema!: object;
+
+  @IsInt()
+  version?: number;
 }

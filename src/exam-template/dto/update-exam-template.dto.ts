@@ -1,13 +1,13 @@
-import { Column } from "typeorm";
-import { IsSchema } from "../validators/exam-template.decorators";
+import { IsBoolean, IsInt, IsNotEmpty, IsString } from "@nestjs/class-validator";
 
 export class UpdateExamTemplateDto{
-    @Column()
-    version?: number
+    @IsString()
+    @IsNotEmpty()
+    name?: string;
 
-    @Column()
-    active?: boolean
+    @IsBoolean()
+    active?: boolean;
 
-    @IsSchema()
-    schema!: object
+    @IsInt()
+    version?: number;
 }
