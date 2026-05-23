@@ -16,8 +16,12 @@ export class ExamTemplateService{
         return await this.repo.save(template);
     }
 
-    async get(): Promise<ExamTemplate[]>{
+    async getActives(): Promise<ExamTemplate[]>{
         return this.repo.findBy({active: true})
+    }
+
+    async getAll(): Promise<ExamTemplate[]>{
+        return this.repo.find();
     }
 
     async getById(id: number): Promise<ExamTemplate | null>{
