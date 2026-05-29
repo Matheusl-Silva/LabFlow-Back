@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
 import { ExamTemplate } from "../entities/exam-template.entity";
 import { DataSource, Repository } from "typeorm";
@@ -29,17 +29,23 @@ export class ExamTemplateService{
     }
 
     async createNewVersion(id: number, dto: CreateNewVersionExamTemplateDto): Promise<ExamTemplate>{
-        return await this.dataSource.transaction(async ()=>{
-            const activeTemplate = await this.repo.findOneBy({id});
+        return await this.dataSource.transaction(async (manager)=>{
+            const repo = manager.getRepository(ExamTemplate);
+            const activeTemplate = await repo.findOneBy({id});
             if(!activeTemplate) throw new NotFoundException('Exam template not found');
+            if(!activeTemplate.active) throw new ConflictException("Exam template is already inactive");
 
             const updateDto: UpdateExamTemplateDto = {active: false};
-            await this.repo.update(id, updateDto);
+            await repo.update(id, updateDto);
 
-            const newVerstionDto: CreateExamTemplateDto = {...dto, name: activeTemplate.name, version: activeTemplate.version + 1};
-            const newTemplate = this.repo.create(newVerstionDto);
+            const latestVersion = await repo.createQueryBuilder('et')
+                                            .select('MAX(et.version)', 'max')
+                                            .where('et.name = :name', {name: activeTemplate.name})
+                                            .getRawOne<{max: number}>();
+            const newVersionDto : CreateExamTemplateDto = {...dto, name: activeTemplate.name, version: (latestVersion?.max ?? activeTemplate.version) + 1}
+            const newTemplate = repo.create(newVersionDto);
 
-            return this.repo.save(newTemplate);
+            return repo.save(newTemplate);
         });
     }
 }
