@@ -24,7 +24,6 @@ export class PatientService{
     async update(id : number, dto : UpdatePatientDto) : Promise<boolean>{
         const patient = await this.repo.findOneBy({id});
         if(!patient) throw new NotFoundException('Patient not found');
-
         const result = await this.repo.update(patient.id, dto);
 
         return (result.affected ?? 0) > 0;
