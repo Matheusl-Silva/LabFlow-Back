@@ -48,4 +48,16 @@ export class ExamTemplateService{
             return repo.save(newTemplate);
         });
     }
+
+    async update(id: number, dto:UpdateExamTemplateDto) : Promise<boolean>{
+        const examTemplate = await this.repo.findOneBy({id});
+        if(!examTemplate) throw new NotFoundException("Exam template not found");
+
+        const existingTemplate = await this.repo.findBy({name: dto.name, active: true});
+        if(existingTemplate && examTemplate.id !== id) throw new ConflictException("There is already a template with this name");
+
+        const result = await this.repo.update(id, dto);
+
+        return (result.affected ?? 0) > 0;
+    }
 }
