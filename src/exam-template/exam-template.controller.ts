@@ -51,7 +51,8 @@ export class ExamTemplateController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateExamTemplateDto,
-  ): Promise<boolean> {
-    return await this.service.update(id, dto);
+  ): Promise<{message: string}> {
+    await this.service.update(id, dto);
+    return {message: "Exam template has been updated successfully"}
   }
 }
