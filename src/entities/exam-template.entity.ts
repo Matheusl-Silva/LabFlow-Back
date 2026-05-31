@@ -1,4 +1,4 @@
-import {Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn} from 'typeorm';
+import {Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn} from 'typeorm';
 import { Exam } from './exam.entity';
 
 @Entity({name: 'exam_templates', database: process.env.MAIN_DB})
@@ -20,6 +20,9 @@ export class ExamTemplate {
 
     @CreateDateColumn({name: 'created_at'})
     createdAt!: Date
+
+    @UpdateDateColumn({name: 'updated_at'})
+    updatedAt!: Date
 
     @OneToMany(() => Exam, (exam) => exam.examTemplate)
     exams!: Exam[]
