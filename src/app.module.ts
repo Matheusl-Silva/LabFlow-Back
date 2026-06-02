@@ -7,6 +7,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MainDatabase } from './providers/database/main.db';
 import { PatientModule } from './patient/patient.module';
 import { ExamTemplateModule } from './exam-template/exam-template.module';
+import { ExamModule } from './exam/exam.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ExamTemplateModule } from './exam-template/exam-template.module';
     UserModule,
     PatientModule,
     ExamTemplateModule,
+    ExamModule,
     AuthModule],
   controllers: [AppController],
   providers: [AppService],
