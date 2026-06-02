@@ -10,5 +10,5 @@ export class CreateExamTemplateDto {
   schema!: object;
 
   @IsInt()
-  version?: number;
+  version?: number = 1;
 }
