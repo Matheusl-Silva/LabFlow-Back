@@ -28,7 +28,8 @@ export class ExamController {
     }
 
     @Put(':id')
-    async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateExamDto): Promise<boolean>{
-        return this.service.update(id, dto);
+    async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateExamDto): Promise<{message: string}>{
+        this.service.update(id, dto);
+        return {message: "Exam has been updated successfully"}
     }
 }
