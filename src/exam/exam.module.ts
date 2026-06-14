@@ -5,9 +5,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ExamTemplate } from '../entities/exam-template.entity';
 import { Exam } from '../entities/exam.entity';
 import { Patient } from '../entities/patient.entity';
+import { User } from '../entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Exam, Patient, ExamTemplate])],
+  imports: [TypeOrmModule.forFeature([Exam, Patient, User, ExamTemplate])],
   providers: [ExamService],
   controllers: [ExamController],
 })

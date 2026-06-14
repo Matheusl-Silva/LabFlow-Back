@@ -3,8 +3,10 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
-  UpdateDateColumn
+  UpdateDateColumn,
+  OneToMany
 } from 'typeorm';
+import { Exam } from './exam.entity';
 
 @Entity({ name: 'users', database: process.env.MAIN_DB })
 export class User {
@@ -28,4 +30,10 @@ export class User {
 
   @UpdateDateColumn({name: 'updated_at'})
   updatedAt!: Date;
+
+  @OneToMany(() => Exam, (exam) => exam.preceptor)
+  examsAsPreceptor!: Exam[]
+
+  @OneToMany(() => Exam, (exam) => exam.responsible)
+  examsAsResponsible!: Exam[]
 }
