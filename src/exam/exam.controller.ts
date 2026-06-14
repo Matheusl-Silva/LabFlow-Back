@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe } from '@
 import { Exam } from '../entities/exam.entity';
 import { ExamService } from './exam.service';
 import { CreateExamDto } from './dto/create-exam.dto';
+import { UpdateExamDto } from './dto/update-exam.dto';
 
 @Controller('exam')
 export class ExamController {
@@ -24,5 +25,10 @@ export class ExamController {
     @Post()
     async create(@Body() dto: CreateExamDto): Promise<Exam>{
         return this.service.create(dto);
+    }
+
+    @Put(':id')
+    async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateExamDto): Promise<boolean>{
+        return this.service.update(id, dto);
     }
 }

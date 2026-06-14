@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Exam } from '../entities/exam.entity';
 import { Repository } from 'typeorm';
@@ -39,4 +39,19 @@ export class ExamService {
   async getById(id: number): Promise<Exam | null> {
     return await this.repo.findOneBy({ id });
   }
+
+  async update(id: number, dto: UpdateExamDto){
+    const exam = await this.repo.findOneBy({id});
+    if(!exam) throw new NotFoundException('Exam not found');
+
+    const template = await this.templateRepo.findOneBy({id: exam.examTemplateId});
+    if(!template) throw new InternalServerErrorException("Template not found");
+  
+    if(dto.data && !isValidExam(dto.data, template.schema)) throw new BadRequestException("The exam does not follow it's schema");
+
+    const result = await this.repo.update(id, dto);
+
+    return (result.affected ?? 0) > 0;
+  }
+
 }
