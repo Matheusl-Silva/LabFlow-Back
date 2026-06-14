@@ -28,11 +28,11 @@ export class Patient {
   @Column({ type: 'enum', enum: Period })
   period!: Period;
 
-  @Column()
+  @Column({nullable: true})
   medication!: string;
 
-  @Column()
-  patology!: string;
+  @Column({nullable: true})
+  pathology!: string;
 
   @Column({ name: 'birth_date' })
   birthDate!: Date;
