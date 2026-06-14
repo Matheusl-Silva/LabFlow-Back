@@ -1,4 +1,5 @@
 export function isValidCPF(cpf : string){
+    if(!cpf) return false;
     const cleaned = cpf.replace(/\D/g, '');
 
     if(cleaned.length !== 11) return false;
