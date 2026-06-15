@@ -54,4 +54,9 @@ export class ExamService {
     return (result.affected ?? 0) > 0;
   }
 
+  async softDelete(id: number): Promise<boolean>{
+    const result = await this.repo.softDelete(id);
+    if(!result.affected) throw new NotFoundException("Exam not found");
+    return (result.affected ?? 0) > 0;
+  }
 }

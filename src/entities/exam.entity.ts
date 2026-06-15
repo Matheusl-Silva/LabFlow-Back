@@ -1,4 +1,4 @@
-import { Entity, Column, JoinColumn, ManyToOne, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { Entity, Column, JoinColumn, ManyToOne, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from "typeorm";
 import { ExamTemplate } from "./exam-template.entity";
 import { Patient } from "./patient.entity";
 import { User } from "./user.entity";
@@ -47,4 +47,7 @@ export class Exam {
 
     @UpdateDateColumn({name: 'updated_at'})
     updatedAt!: Date;
+
+    @DeleteDateColumn({name: 'deleted_at'})
+    deletedAt!: Date;
 }
