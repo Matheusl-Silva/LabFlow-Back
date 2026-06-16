@@ -12,8 +12,10 @@ export class PatientService{
         return this.repo.find();
     }
 
-    getById(id: number) : Promise<Patient | null>{
-        return this.repo.findOneBy({id});
+    async getById(id: number) : Promise<Patient | null>{
+        const pacient = await this.repo.findOneBy({id});
+        if(!pacient) throw new NotFoundException("Patient not found");
+        return pacient;
     }
 
     async create(dto : CreatePatientDto) : Promise<Patient>{

@@ -37,7 +37,9 @@ export class ExamService {
   }
 
   async getById(id: number): Promise<Exam | null> {
-    return await this.repo.findOneBy({ id });
+    const exam = await this.repo.findOneBy({ id });
+    if(!exam) throw new NotFoundException("Exam not found");
+    return exam;
   }
 
   async update(id: number, dto: UpdateExamDto){

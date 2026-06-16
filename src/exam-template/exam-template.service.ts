@@ -5,6 +5,7 @@ import { DataSource, Repository } from "typeorm";
 import { CreateExamTemplateDto } from "./dto/create-exam-template.dto";
 import { UpdateExamTemplateDto } from "./dto/update-exam-template.dto";
 import { CreateNewVersionExamTemplateDto } from "./dto/create-new-version-exam-template.dto";
+import { tmpdir } from "os";
 
 @Injectable()
 export class ExamTemplateService{
@@ -25,7 +26,9 @@ export class ExamTemplateService{
     }
 
     async getById(id: number): Promise<ExamTemplate | null>{
-        return this.repo.findOneBy({id});
+        const template = await this.repo.findOneBy({id});
+        if(!template) throw new NotFoundException("Exam template not found");
+        return template;
     }
 
     async createNewVersion(id: number, dto: CreateNewVersionExamTemplateDto): Promise<ExamTemplate>{

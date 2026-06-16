@@ -19,8 +19,10 @@ export class UserService {
     return this.userRepo.find();
   }
 
-  getById(id: number): Promise<User | null> {
-    return this.userRepo.findOneBy({ id });
+  async getById(id: number): Promise<User | null> {
+    const user = await this.userRepo.findOneBy({ id });
+    if(!user) throw new NotFoundException("User not found");
+    return user;
   }
 
   async update(id: number, dto: UpdateUserDto): Promise<boolean> {
