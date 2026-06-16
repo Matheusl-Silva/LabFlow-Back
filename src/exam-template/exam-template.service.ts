@@ -60,4 +60,18 @@ export class ExamTemplateService{
 
         return (result.affected ?? 0) > 0;
     }
+
+    async softDelete(id: number): Promise<boolean>{
+        return await this.dataSource.transaction(async (manager) => {
+            const repo = manager.getRepository(ExamTemplate);
+            
+            const template = await repo.findOneBy({id});
+            if(!template) throw new NotFoundException("Exam template not found");
+
+            await repo.update(id, {active: false});
+            const result = await repo.softDelete(id);
+
+            return (result.affected ?? 0) > 0;
+        })
+    }
 }

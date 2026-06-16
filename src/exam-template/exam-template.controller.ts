@@ -6,6 +6,7 @@ import {
   Post,
   Param,
   Put,
+  Delete
 } from '@nestjs/common';
 import { ExamTemplateService } from './exam-template.service';
 import { ExamTemplate } from '../entities/exam-template.entity';
@@ -54,5 +55,11 @@ export class ExamTemplateController {
   ): Promise<{message: string}> {
     await this.service.update(id, dto);
     return {message: "Exam template has been updated successfully"}
+  }
+
+  @Delete(':id')
+  async softDelete(@Param('id', ParseIntPipe) id: number): Promise<{message: string}>{
+    await this.service.softDelete(id);
+    return {message: 'Exam template has been deleted successfully'};
   }
 }
