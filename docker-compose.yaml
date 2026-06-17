@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${MAIN_DB_USER}
       POSTGRES_PASSWORD: ${MAIN_DB_PASSWORD}
