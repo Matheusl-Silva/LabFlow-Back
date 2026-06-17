@@ -12,8 +12,10 @@ export class PatientService{
         return this.repo.find();
     }
 
-    getById(id: number) : Promise<Patient | null>{
-        return this.repo.findOneBy({id});
+    async getById(id: number) : Promise<Patient | null>{
+        const pacient = await this.repo.findOneBy({id});
+        if(!pacient) throw new NotFoundException("Patient not found");
+        return pacient;
     }
 
     async create(dto : CreatePatientDto) : Promise<Patient>{
@@ -24,7 +26,6 @@ export class PatientService{
     async update(id : number, dto : UpdatePatientDto) : Promise<boolean>{
         const patient = await this.repo.findOneBy({id});
         if(!patient) throw new NotFoundException('Patient not found');
-
         const result = await this.repo.update(patient.id, dto);
 
         return (result.affected ?? 0) > 0;

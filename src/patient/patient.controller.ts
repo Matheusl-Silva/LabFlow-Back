@@ -8,6 +8,7 @@ import {
   Patch,
   Delete,
   ConflictException,
+  Put,
 } from '@nestjs/common';
 import { PatientService } from './patient.service';
 import { Patient } from '../entities/patient.entity';
@@ -54,13 +55,14 @@ export class PatientController {
     }
   }
 
-  @Patch(':id')
+  @Put(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,
-    dto: UpdatePatientDto,
-  ): Promise<boolean> {
+    @Body() dto: UpdatePatientDto,
+  ): Promise<{message: string}> {
     try {
-      return this.patientService.update(id, dto);
+      this.patientService.update(id, dto);
+      return {message: "Patient has been updated successfully"}
     } catch (err) {
       console.error(err);
       throw err;

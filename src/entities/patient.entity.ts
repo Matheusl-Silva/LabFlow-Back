@@ -2,9 +2,12 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+
+import { Exam } from './exam.entity';
 
 export enum Period {
   MORNING = 'Matutino',
@@ -25,11 +28,11 @@ export class Patient {
   @Column({ type: 'enum', enum: Period })
   period!: Period;
 
-  @Column()
+  @Column({nullable: true})
   medication!: string;
 
-  @Column()
-  patology!: string;
+  @Column({nullable: true})
+  pathology!: string;
 
   @Column({ name: 'birth_date' })
   birthDate!: Date;
@@ -45,4 +48,7 @@ export class Patient {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
+
+  @OneToMany(() => Exam, (exam) => exam.patient)
+  exams!: Exam[]
 }

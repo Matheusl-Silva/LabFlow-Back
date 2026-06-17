@@ -22,7 +22,7 @@ export class CreatePatientDto{
 
     @IsString()
     @IsOptional()
-    patology!:string
+    pathology!:string
 
     @IsDateString()
     @IsNotEmpty()
