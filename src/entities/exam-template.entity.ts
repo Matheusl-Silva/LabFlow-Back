@@ -10,7 +10,7 @@ export class ExamTemplate {
     name!: string;
 
     @Column()
-    version: number = 1; //Tá certo?
+    version: number = 1;
 
     @Column({name: 'schema_json', type: 'jsonb'})
     schema!: object;

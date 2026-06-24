@@ -3,8 +3,10 @@ import { QueryFailedError } from 'typeorm';
 import { SignInDto } from './dto/signin.dto';
 import { SignUpDto } from './dto/signup.dto.ts';
 import { AuthService } from './auth.service';
+import { Public } from '../common/decorators/is-public.decorator';
 
 @Controller('auth')
+@Public()
 export class AuthController {
     constructor(private authService: AuthService){}
   @Post('signup')
