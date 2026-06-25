@@ -22,8 +22,8 @@ export class User {
   @Column()
   passwordHash!: string;
 
-  @Column({name: 'is_admin'})
-  isAdmin: boolean = false;
+  @Column({name: 'is_admin', default: false})
+  isAdmin!: boolean;
 
   @CreateDateColumn({name: 'created_at'})
   createdAt!: Date;
