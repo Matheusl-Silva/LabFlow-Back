@@ -3,6 +3,9 @@ import { Exam } from '../entities/exam.entity';
 import { ExamService } from './exam.service';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
+import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
+import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
+import { User } from '../entities/user.entity';
 
 @Controller('exam')
 export class ExamController {
@@ -12,9 +15,11 @@ export class ExamController {
         return this.service.get();
     }
 
+    @AllowCommonUser()
     @Get(':id')
-    async getById(@Param('id', ParseIntPipe) id: number): Promise<Exam | null>{
-        return this.service.getById(id);
+    async getById(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: User): Promise<Exam | null>{
+        if(user.isAdmin) return this.service.getById(id);
+        return this.service.getPrivateById(id);
     }
 
     @Get('/patient/:id')

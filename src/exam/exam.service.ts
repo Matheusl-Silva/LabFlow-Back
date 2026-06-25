@@ -37,7 +37,43 @@ export class ExamService {
   }
 
   async getById(id: number): Promise<Exam | null> {
-    const exam = await this.repo.findOneBy({ id });
+    const exam = await this.repo.createQueryBuilder("exam")
+    .leftJoin("exam.examTemplate", "examTemplate")
+    .select([
+      "exam",
+      "examTemplate.schema"
+    ])
+    .where({id})
+    .getOne();
+
+    if(!exam) throw new NotFoundException("Exam not found");
+    return exam;
+  }
+
+  async getPrivateById(id: number): Promise<Exam | null>{
+    const exam = await this.repo.findOne({
+      where:{id},
+      relations:{
+        preceptor: true,
+        responsible: true,
+        examTemplate: true
+      },
+      select:{
+        id: true,
+        date: true,
+        preceptor:{
+          name: true
+        },
+        responsible:{
+          name: true
+        },
+        examTemplate:{
+          schema: true
+        },
+        data: true
+      },
+    });
+
     if(!exam) throw new NotFoundException("Exam not found");
     return exam;
   }
