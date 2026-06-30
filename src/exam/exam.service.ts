@@ -45,7 +45,7 @@ export class ExamService {
         preceptor: true,
         examTemplate: true
       },
-      where: { patient: { id: patientId } }
+      where: { patientId }
     });
   }
 
