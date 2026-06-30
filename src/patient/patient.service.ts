@@ -12,6 +12,17 @@ export class PatientService{
         return this.repo.find();
     }
 
+    async getPrivate(): Promise<Patient[]>{
+        return this.repo.find({
+            select:{
+                id: true,
+                period: true,
+                medication: true,
+                pathology: true
+            }
+        })
+    }
+
     async getById(id: number) : Promise<Patient | null>{
         const pacient = await this.repo.findOneBy({id});
         if(!pacient) throw new NotFoundException("Patient not found");

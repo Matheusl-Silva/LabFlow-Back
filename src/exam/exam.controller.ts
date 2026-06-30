@@ -22,11 +22,13 @@ export class ExamController {
         return this.service.getPrivateById(id);
     }
 
+    @AllowCommonUser()
     @Get('/patient/:id')
     async getByPatientId(@Param('id', ParseIntPipe) patientId: number): Promise<Exam[]>{
         return this.service.getByPatientId(patientId);
     }
 
+    @AllowCommonUser()
     @Post()
     async create(@Body() dto: CreateExamDto): Promise<Exam>{
         return this.service.create(dto);
