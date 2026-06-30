@@ -31,8 +31,21 @@ export class ExamService {
 
   async getByPatientId(patientId: number): Promise<Exam[]> {
     return this.repo.find({
-      where: { patient: { id: patientId } },
-      relations: { patient: true },
+      select:{
+        id: true,
+        date: true,
+        preceptor: {
+          name: true
+        },
+        examTemplate: {
+          name: true
+        },
+      },
+      relations: { 
+        preceptor: true,
+        examTemplate: true
+      },
+      where: { patient: { id: patientId } }
     });
   }
 
