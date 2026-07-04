@@ -1,7 +1,7 @@
 import { IsString, IsNotEmpty, IsEmail, IsEnum, IsPhoneNumber, IsOptional, IsDateString} from "@nestjs/class-validator"
 import { Transform } from "class-transformer";
 import { Period } from "../../entities/patient.entity";
-import { IsCPF } from "../../common/validators/is-cpf.decorator";
+import { IsCPF } from "../../common/decorators/is-cpf.decorator";
 
 export class CreatePatientDto{
     @IsString()

@@ -5,7 +5,6 @@ import { DataSource, Repository } from "typeorm";
 import { CreateExamTemplateDto } from "./dto/create-exam-template.dto";
 import { UpdateExamTemplateDto } from "./dto/update-exam-template.dto";
 import { CreateNewVersionExamTemplateDto } from "./dto/create-new-version-exam-template.dto";
-import { tmpdir } from "os";
 
 @Injectable()
 export class ExamTemplateService{

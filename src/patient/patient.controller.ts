@@ -5,7 +5,6 @@ import {
   Param,
   ParseIntPipe,
   Body,
-  Patch,
   Delete,
   ConflictException,
   Put,
@@ -15,19 +14,19 @@ import { Patient } from '../entities/patient.entity';
 import { UpdatePatientDto } from './dto/update-patient.dto';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { QueryFailedError } from 'typeorm';
+import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
+import { User } from '../entities/user.entity';
+import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
 
 @Controller('patient')
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
+  @AllowCommonUser()
   @Get()
-  async get(): Promise<Patient[]> {
-    try {
-      return await this.patientService.get();
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
+  async get(@UserFromJwt() user: User): Promise<Patient[]> {
+    if(user.isAdmin) return this.patientService.get();
+    return this.patientService.getPrivate();
   }
 
   @Get(':id')

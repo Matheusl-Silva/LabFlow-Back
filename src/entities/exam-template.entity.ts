@@ -9,14 +9,14 @@ export class ExamTemplate {
     @Column()
     name!: string;
 
-    @Column()
-    version: number = 1; //Tá certo?
+    @Column({default: 1})
+    version!: number;
 
     @Column({name: 'schema_json', type: 'jsonb'})
     schema!: object;
     
     @Column({default: true})
-    active: boolean = true
+    active!: boolean
 
     @CreateDateColumn({name: 'created_at'})
     createdAt!: Date
