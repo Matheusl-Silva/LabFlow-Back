@@ -9,6 +9,7 @@ import {
   ConflictException,
   Put,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { PatientService } from './patient.service';
 import { Patient } from '../entities/patient.entity';
 import { UpdatePatientDto } from './dto/update-patient.dto';
@@ -17,11 +18,14 @@ import { QueryFailedError } from 'typeorm';
 import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
 import { User } from '../entities/user.entity';
 import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
+import { PatientSwagger } from './patient.swagger';
 
+@ApiTags('Pacientes')
 @Controller('patient')
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
+  @PatientSwagger.findPatients()
   @AllowCommonUser()
   @Get()
   async get(@UserFromJwt() user: User): Promise<Patient[]> {
@@ -29,6 +33,7 @@ export class PatientController {
     return this.patientService.getPrivate();
   }
 
+  @PatientSwagger.findPatientById()
   @Get(':id')
   async getById(
     @Param('id', ParseIntPipe) id: number,
@@ -41,6 +46,7 @@ export class PatientController {
     }
   }
 
+  @PatientSwagger.createPatient()
   @Post()
   async create(@Body() dto: CreatePatientDto): Promise<Patient> {
     try {
@@ -54,6 +60,7 @@ export class PatientController {
     }
   }
 
+  @PatientSwagger.updatePatient()
   @Put(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -68,6 +75,7 @@ export class PatientController {
     }
   }
 
+  @PatientSwagger.deletePatient()
   @Delete(':id')
   async delete(@Param('id', ParseIntPipe) id: number): Promise<boolean> {
     try{

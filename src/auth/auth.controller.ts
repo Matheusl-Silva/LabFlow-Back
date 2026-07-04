@@ -1,14 +1,19 @@
 import { Controller, Post, Body, ConflictException } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { QueryFailedError } from 'typeorm';
 import { SignInDto } from './dto/signin.dto';
 import { SignUpDto } from './dto/signup.dto.ts';
 import { AuthService } from './auth.service';
 import { Public } from '../common/decorators/is-public.decorator';
+import { AuthSwagger } from './auth.swagger';
 
+@ApiTags('Auth')
 @Controller('auth')
 @Public()
 export class AuthController {
     constructor(private authService: AuthService){}
+
+  @AuthSwagger.signup()
   @Post('signup')
   async signup(@Body() dto: SignUpDto): Promise<{ token: string }> {
     try {
@@ -22,6 +27,7 @@ export class AuthController {
     }
   }
 
+  @AuthSwagger.signin()
   @Post('signin')
   async signin(@Body() dto: SignInDto): Promise<{ token: string }> {
     try {
