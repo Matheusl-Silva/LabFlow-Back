@@ -6,12 +6,16 @@ import {
   Delete,
   Param,
   ParseIntPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { User } from '../entities/user.entity';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserSwagger } from './user.swagger';
+import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
+import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
+import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Usuários')
 @Controller('user')
@@ -30,14 +34,11 @@ export class UserController {
   }
 
   @UserSwagger.findUserById()
+  @AllowCommonUser()
   @Get(':id')
-  async getById(@Param('id', ParseIntPipe) id: number): Promise<User | null> {
-    try {
-      return await this.userService.getById(id);
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
+  async getById(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: JwtPayload): Promise<User | null> {
+    if(user.id !== id) throw new ForbiddenException();
+    return await this.userService.getById(id);
   }
 
   @UserSwagger.updateUser()

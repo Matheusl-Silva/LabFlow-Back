@@ -6,8 +6,8 @@ import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
 import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
 import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
-import { User } from '../entities/user.entity';
 import { ExamSwagger } from './exam.swagger';
+import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Exames')
 @Controller('exam')
@@ -23,7 +23,7 @@ export class ExamController {
     @ExamSwagger.findExamById()
     @AllowCommonUser()
     @Get(':id')
-    async getById(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: User): Promise<Exam | null>{
+    async getById(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: JwtPayload): Promise<Exam | null>{
         if(user.isAdmin) return this.service.getById(id);
         return this.service.getPrivateById(id);
     }

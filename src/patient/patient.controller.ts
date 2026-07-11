@@ -19,6 +19,7 @@ import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
 import { User } from '../entities/user.entity';
 import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
 import { PatientSwagger } from './patient.swagger';
+import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Pacientes')
 @Controller('patient')
@@ -28,7 +29,7 @@ export class PatientController {
   @PatientSwagger.findPatients()
   @AllowCommonUser()
   @Get()
-  async get(@UserFromJwt() user: User): Promise<Patient[]> {
+  async get(@UserFromJwt() user: JwtPayload): Promise<Patient[]> {
     if(user.isAdmin) return this.patientService.get();
     return this.patientService.getPrivate();
   }

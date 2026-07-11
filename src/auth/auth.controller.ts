@@ -2,7 +2,7 @@ import { Controller, Post, Body, ConflictException } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { QueryFailedError } from 'typeorm';
 import { SignInDto } from './dto/signin.dto';
-import { SignUpDto } from './dto/signup.dto.ts';
+import { SignUpDto } from './dto/signup.dto';
 import { AuthService } from './auth.service';
 import { Public } from '../common/decorators/is-public.decorator';
 import { AuthSwagger } from './auth.swagger';
@@ -28,6 +28,7 @@ export class AuthController {
   }
 
   @AuthSwagger.signin()
+  @Public()
   @Post('signin')
   async signin(@Body() dto: SignInDto): Promise<{ token: string }> {
     try {
