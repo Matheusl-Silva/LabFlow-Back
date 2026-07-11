@@ -7,13 +7,18 @@ import {
   Param,
   ParseIntPipe,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { User } from '../entities/user.entity';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserSwagger } from './user.swagger';
 
+@ApiTags('Usuários')
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  @UserSwagger.findUsers()
   @Get()
   async get(): Promise<User[]> {
     try {
@@ -24,6 +29,7 @@ export class UserController {
     }
   }
 
+  @UserSwagger.findUserById()
   @Get(':id')
   async getById(@Param('id', ParseIntPipe) id: number): Promise<User | null> {
     try {
@@ -34,6 +40,7 @@ export class UserController {
     }
   }
 
+  @UserSwagger.updateUser()
   @Put(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -48,6 +55,7 @@ export class UserController {
     }
   }
 
+  @UserSwagger.deleteUser()
   @Delete(':id')
   async delete(@Param('id', ParseIntPipe) id: number): Promise<{ message: string }> {
     try {
