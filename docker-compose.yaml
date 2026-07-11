@@ -1,4 +1,17 @@
 services:
+  app:
+    build:
+      context: .
+    ports:
+      - 3000:3000
+    image: labflow_back:latest
+    depends_on:
+      - db
+    environment:
+      MAIN_DB_URL: "postgresql://${MAIN_DB_USER}:${MAIN_DB_PASSWORD}@db:5432/${MAIN_DB}"
+      PORT: ${PORT}
+      JWT_SECRET: ${JWT_SECRET}
+    restart: always
   db:
     image: postgres
     restart: unless-stopped
