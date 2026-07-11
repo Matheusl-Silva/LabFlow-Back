@@ -7,6 +7,6 @@ export const MainDatabase = TypeOrmModule.forRootAsync({
         type: 'postgres',
         url: config.get<string>('MAIN_DB_URL'),
         autoLoadEntities: true,
-        synchronize: true
+        synchronize: false
     })
 })
