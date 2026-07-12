@@ -1,5 +1,17 @@
 services:
-  app:
+  front:
+    build:
+      context: ../LabFlow-Front
+    image: labflow_front:latest
+    ports: 
+      - 3001:3001
+    depends_on:
+      - back
+      - db
+    env_file:
+      - ../LabFlow-Front/.env
+    restart: always
+  back:
     build:
       context: .
     ports:
