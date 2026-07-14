@@ -35,12 +35,17 @@ export class PatientController {
   }
 
   @PatientSwagger.findPatientById()
+  @AllowCommonUser()
   @Get(':id')
   async getById(
     @Param('id', ParseIntPipe) id: number,
+    @UserFromJwt() user: JwtPayload,
   ): Promise<Patient | null> {
     try {
-      return await this.patientService.getById(id);
+      // Usuário comum precisa do paciente para registrar exames, mas não pode
+      // ver os dados pessoais dele.
+      if (user.isAdmin) return await this.patientService.getById(id);
+      return await this.patientService.getPrivateById(id);
     } catch (err) {
       console.error(err);
       throw err;

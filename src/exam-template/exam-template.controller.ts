@@ -15,6 +15,7 @@ import { CreateExamTemplateDto } from './dto/create-exam-template.dto';
 import { CreateNewVersionExamTemplateDto } from './dto/create-new-version-exam-template.dto';
 import { UpdateExamTemplateDto } from './dto/update-exam-template.dto';
 import { ExamTemplateSwagger } from './exam-template.swagger';
+import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
 
 @ApiTags('Templates de Exame')
 @Controller('/template')
@@ -22,6 +23,7 @@ export class ExamTemplateController {
   constructor(private readonly service: ExamTemplateService) {}
 
   @ExamTemplateSwagger.findActiveTemplates()
+  @AllowCommonUser()
   @Get()
   async getActives(): Promise<ExamTemplate[]> {
     return await this.service.getActives();
@@ -34,6 +36,7 @@ export class ExamTemplateController {
   }
 
   @ExamTemplateSwagger.findTemplateById()
+  @AllowCommonUser()
   @Get('/:id')
   async getById(
     @Param('id', ParseIntPipe) id: number,
