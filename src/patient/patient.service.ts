@@ -13,15 +13,14 @@ export class PatientService{
     }
 
     /**
-     * Campos que NÃO identificam o paciente. É o único recorte que um usuário
-     * comum pode enxergar: nome, e-mail, CPF, telefone e data de nascimento são
-     * dados pessoais e ficam restritos ao administrador.
+     * Único recorte que um usuário comum pode enxergar. Fora daqui é dado
+     * pessoal (nome, e-mail, CPF, telefone, nascimento) ou dado de saúde
+     * (medicação, patologia) — ambos restritos ao administrador.
      */
     private static readonly NON_IDENTIFYING_FIELDS = {
         id: true,
         period: true,
-        medication: true,
-        pathology: true,
+        createdAt: true,
     } as const;
 
     async getPrivate(): Promise<Patient[]>{
