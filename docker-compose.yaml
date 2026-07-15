@@ -18,7 +18,8 @@ services:
       - 3000:3000
     image: labflow_back:latest
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       MAIN_DB_URL: "postgresql://${MAIN_DB_USER}:${MAIN_DB_PASSWORD}@db:5432/${MAIN_DB}"
       PORT: ${PORT}
@@ -35,6 +36,11 @@ services:
       - '${MAIN_DB_PORT}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${MAIN_DB_USER} -d ${MAIN_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

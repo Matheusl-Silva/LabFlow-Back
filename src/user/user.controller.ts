@@ -23,10 +23,12 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @UserSwagger.findUsers()
+  @AllowCommonUser()
   @Get()
-  async get(): Promise<User[]> {
+  async get(@UserFromJwt() user: JwtPayload): Promise<User[]> {
     try {
-      return await this.userService.get();
+      if (user.isAdmin) return await this.userService.get();
+      return await this.userService.getPrivate();
     } catch (err) {
       console.error(err);
       throw err;
@@ -37,7 +39,7 @@ export class UserController {
   @AllowCommonUser()
   @Get(':id')
   async getById(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: JwtPayload): Promise<User | null> {
-    if(user.id !== id) throw new ForbiddenException();
+    if(!user.isAdmin && user.id !== id) throw new ForbiddenException();
     return await this.userService.getById(id);
   }
 

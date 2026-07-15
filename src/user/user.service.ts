@@ -15,12 +15,29 @@ export class UserService {
     private config: ConfigService
   ) {}
 
+  private static readonly PUBLIC_FIELDS = {
+    id: true,
+    name: true,
+    email: true,
+    isAdmin: true,
+    createdAt: true,
+    updatedAt: true,
+  } as const;
+
   get(): Promise<User[]> {
-    return this.userRepo.find();
+    return this.userRepo.find({ select: UserService.PUBLIC_FIELDS });
+  }
+
+  /** Usuário comum só enxerga o mínimo para escolher preceptor/responsável. */
+  getPrivate(): Promise<User[]> {
+    return this.userRepo.find({ select: { id: true, name: true } });
   }
 
   async getById(id: number): Promise<User | null> {
-    const user = await this.userRepo.findOneBy({ id });
+    const user = await this.userRepo.findOne({
+      where: { id },
+      select: UserService.PUBLIC_FIELDS,
+    });
     if(!user) throw new NotFoundException("User not found");
     return user;
   }
@@ -35,7 +52,7 @@ export class UserService {
 
     if (pass) newData.passwordHash = await hash(pass);
 
-    const result = await this.userRepo.update(user.id, newData);1
+    const result = await this.userRepo.update(user.id, newData);
 
     return (result.affected ?? 0) > 0;
   }

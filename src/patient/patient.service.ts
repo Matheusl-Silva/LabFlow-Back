@@ -12,14 +12,20 @@ export class PatientService{
         return this.repo.find();
     }
 
+    /**
+     * Único recorte que um usuário comum pode enxergar. Fora daqui é dado
+     * pessoal (nome, e-mail, CPF, telefone, nascimento) ou dado de saúde
+     * (medicação, patologia) — ambos restritos ao administrador.
+     */
+    private static readonly NON_IDENTIFYING_FIELDS = {
+        id: true,
+        period: true,
+        createdAt: true,
+    } as const;
+
     async getPrivate(): Promise<Patient[]>{
         return this.repo.find({
-            select:{
-                id: true,
-                period: true,
-                medication: true,
-                pathology: true
-            }
+            select: PatientService.NON_IDENTIFYING_FIELDS
         })
     }
 
@@ -27,6 +33,16 @@ export class PatientService{
         const pacient = await this.repo.findOneBy({id});
         if(!pacient) throw new NotFoundException("Patient not found");
         return pacient;
+    }
+
+    /** Mesmo recorte de `getPrivate`, para um paciente só. */
+    async getPrivateById(id: number): Promise<Patient | null>{
+        const patient = await this.repo.findOne({
+            where: {id},
+            select: PatientService.NON_IDENTIFYING_FIELDS
+        });
+        if(!patient) throw new NotFoundException("Patient not found");
+        return patient;
     }
 
     async create(dto : CreatePatientDto) : Promise<Patient>{
