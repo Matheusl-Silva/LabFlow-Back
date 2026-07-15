@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+import { Anamnesis } from './anamnesis.entity';
 import { Exam } from './exam.entity';
 
 export enum Period {
@@ -51,4 +52,7 @@ export class Patient {
 
   @OneToMany(() => Exam, (exam) => exam.patient)
   exams!: Exam[]
+
+  @OneToMany(() => Anamnesis, (anamnesis) => anamnesis.patient)
+  anamneses!: Anamnesis[]
 }
