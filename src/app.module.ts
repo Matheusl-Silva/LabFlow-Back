@@ -11,6 +11,7 @@ import { ExamModule } from './exam/exam.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtGuard } from './common/guards/jwt.guard';
 import { AdminGuard } from './common/guards/admin.guard';
+import { AnamnesisModule } from './anamnesis/anamnesis.module';
 
 @Module({
   imports: [
@@ -22,7 +23,8 @@ import { AdminGuard } from './common/guards/admin.guard';
     PatientModule,
     ExamTemplateModule,
     ExamModule,
-    AuthModule],
+    AuthModule,
+    AnamnesisModule],
   controllers: [AppController],
   providers: [
     AppService,

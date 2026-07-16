@@ -4,11 +4,16 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
+  Index,
   OneToMany
 } from 'typeorm';
 import { Exam } from './exam.entity';
 
 @Entity({ name: 'users', database: process.env.MAIN_DB })
+// Unicidade só entre usuários ATIVOS: o e-mail de um usuário excluído fica livre
+// para um novo cadastro.
+@Index('ux_users_email_active', ['email'], { unique: true, where: 'deleted_at IS NULL' })
 export class User {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -16,7 +21,8 @@ export class User {
   @Column()
   name!: string;
 
-  @Column({unique: true})
+  // Unicidade agora vem do índice parcial ux_users_email_active (ver classe).
+  @Column()
   email!: string;
 
   @Column()
@@ -30,6 +36,11 @@ export class User {
 
   @UpdateDateColumn({name: 'updated_at'})
   updatedAt!: Date;
+
+  // Soft delete: preserva quem foi preceptor/responsável dos exames (as FKs
+  // continuam válidas). O TypeORM esconde os registros com deleted_at != null.
+  @DeleteDateColumn({name: 'deleted_at'})
+  deletedAt!: Date | null;
 
   @OneToMany(() => Exam, (exam) => exam.preceptor)
   examsAsPreceptor!: Exam[]
