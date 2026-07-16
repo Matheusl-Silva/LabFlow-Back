@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException} from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException} from "@nestjs/common";
 import { Patient } from "../entities/patient.entity";
 import { Repository } from "typeorm";
 import { UpdatePatientDto } from "./dto/update-patient.dto";
@@ -46,7 +46,27 @@ export class PatientService{
     }
 
     async create(dto : CreatePatientDto) : Promise<Patient>{
-        const patient = await this.repo.create(dto);
+        // CPF é identidade nacional: mesmo CPF = mesma pessoa. Se já existe um
+        // paciente ATIVO com esse CPF, é conflito real. Se existe um paciente
+        // EXCLUÍDO (soft delete) com esse CPF, é a mesma pessoa voltando —
+        // reativamos o registro (mantendo o id e o histórico de exames/anamneses)
+        // em vez de criar um novo.
+        const active = await this.repo.findOneBy({cpf: dto.cpf});
+        if(active) throw new ConflictException('Patient already registered');
+
+        const deleted = await this.repo.findOne({
+            where: {cpf: dto.cpf},
+            withDeleted: true,
+            order: {id: 'DESC'},
+        });
+
+        if(deleted){
+            await this.repo.update(deleted.id, dto); // sobrescreve com os dados do novo cadastro
+            await this.repo.restore(deleted.id);     // deleted_at = null (reativa)
+            return this.repo.findOneByOrFail({id: deleted.id});
+        }
+
+        const patient = this.repo.create(dto);
         return this.repo.save(patient);
     }
 
@@ -59,7 +79,9 @@ export class PatientService{
     }
 
     async delete(id : number) : Promise<boolean>{
-        const result = await this.repo.delete(id);
+        // Soft delete: marca deleted_at em vez de remover a linha, preservando
+        // exames/anamneses vinculados (e as respectivas FKs).
+        const result = await this.repo.softDelete(id);
         if(!result.affected) throw new NotFoundException('Patient not found');
         return (result.affected ?? 0) > 0;
     }

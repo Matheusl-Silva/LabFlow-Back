@@ -58,8 +58,9 @@ export class UserService {
   }
 
   async delete(id: number): Promise<boolean> {
-
-    const result = await this.userRepo.delete({ id });
+    // Soft delete: marca deleted_at em vez de remover a linha, preservando os
+    // exames em que o usuário foi preceptor/responsável (e as FKs).
+    const result = await this.userRepo.softDelete({ id });
 
     if(!result.affected) throw new NotFoundException("User not found");
 
