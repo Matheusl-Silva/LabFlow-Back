@@ -73,7 +73,7 @@ export class PatientController {
     @Body() dto: UpdatePatientDto,
   ): Promise<{message: string}> {
     try {
-      this.patientService.update(id, dto);
+      await this.patientService.update(id, dto);
       return {message: "Patient has been updated successfully"}
     } catch (err) {
       console.error(err);

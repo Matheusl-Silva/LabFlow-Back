@@ -5,7 +5,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-} from '@nestjs/class-validator';
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAnamnesisDto {
@@ -14,6 +15,7 @@ export class CreateAnamnesisDto {
     example: 'Dor de cabeça persistente há 3 dias',
   })
   @IsString()
+  @MaxLength(250)
   @IsNotEmpty()
   chiefComplaint!: string;
 
@@ -30,6 +32,7 @@ export class CreateAnamnesisDto {
     example: 'Diária',
   })
   @IsString()
+  @MaxLength(250)
   @IsNotEmpty()
   frequency!: string;
 
@@ -38,6 +41,7 @@ export class CreateAnamnesisDto {
     example: 'Região frontal da cabeça',
   })
   @IsString()
+  @MaxLength(250)
   @IsNotEmpty()
   painLocation!: string;
 
@@ -81,6 +85,7 @@ export class CreateAnamnesisDto {
     example: 'Asma',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   otherDiseases?: string;
 
@@ -89,6 +94,7 @@ export class CreateAnamnesisDto {
     example: 'Penicilina',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   allergies?: string;
 
@@ -97,6 +103,7 @@ export class CreateAnamnesisDto {
     example: 'Losartana 50mg',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   medication?: string;
 
@@ -112,6 +119,7 @@ export class CreateAnamnesisDto {
     example: 'Normal',
   })
   @IsString()
+  @MaxLength(250)
   @IsNotEmpty()
   urinaryElimination!: string;
 
@@ -120,6 +128,7 @@ export class CreateAnamnesisDto {
     example: 'Regular',
   })
   @IsString()
+  @MaxLength(250)
   @IsNotEmpty()
   intestinalElimination!: string;
 
@@ -128,6 +137,7 @@ export class CreateAnamnesisDto {
     example: 'Regular, 28 dias',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   menstrualCycle?: string;
 
@@ -136,6 +146,7 @@ export class CreateAnamnesisDto {
     example: 'Sono tranquilo',
   })
   @IsString()
+  @MaxLength(250)
   @IsNotEmpty()
   sleepAndRest!: string;
 
@@ -151,6 +162,7 @@ export class CreateAnamnesisDto {
     example: 'Não fuma',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   smokingFrequency?: string;
 
@@ -159,6 +171,7 @@ export class CreateAnamnesisDto {
     example: 'Não usa',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   drugsFrequency?: string;
 
@@ -167,6 +180,7 @@ export class CreateAnamnesisDto {
     example: 'Socialmente',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   alcoholFrequency?: string;
 
@@ -175,6 +189,7 @@ export class CreateAnamnesisDto {
     example: '3 vezes por semana',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   exerciseFrequency?: string;
 
@@ -183,6 +198,7 @@ export class CreateAnamnesisDto {
     example: 'Leitura e caminhadas',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   leisure?: string;
 
@@ -198,6 +214,7 @@ export class CreateAnamnesisDto {
     example: 'Cão e gato',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   domesticAnimals?: string;
 
@@ -213,6 +230,7 @@ export class CreateAnamnesisDto {
     example: 'Diabetes',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   familyDisease?: string;
 
@@ -221,6 +239,7 @@ export class CreateAnamnesisDto {
     example: 'Uso contínuo de insulina',
   })
   @IsString()
+  @MaxLength(250)
   @IsOptional()
   familyDiseaseTreatment?: string;
 

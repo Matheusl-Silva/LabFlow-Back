@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsEmail, IsEnum, IsPhoneNumber, IsOptional, IsDateString} from "@nestjs/class-validator"
+import { IsString, IsNotEmpty, IsEmail, IsEnum, IsPhoneNumber, IsOptional, IsDateString, MaxLength} from "class-validator"
 import { Transform } from "class-transformer";
 import { Period } from "../../entities/patient.entity";
 import { IsCPF } from "../../common/decorators/is-cpf.decorator";
@@ -11,6 +11,7 @@ export class CreatePatientDto{
     })
     @IsString()
     @IsNotEmpty()
+    @MaxLength(120)
     name!:string
 
     @ApiProperty({
@@ -19,6 +20,7 @@ export class CreatePatientDto{
     }) 
     @IsEmail()
     @IsNotEmpty()
+    @MaxLength(254)
     email!:string
 
     @ApiProperty({
@@ -36,6 +38,7 @@ export class CreatePatientDto{
     })
     @IsString()
     @IsOptional()
+    @MaxLength(250)
     medication!:string
 
     @ApiPropertyOptional({
@@ -44,6 +47,7 @@ export class CreatePatientDto{
     })
     @IsString()
     @IsOptional()
+    @MaxLength(250)
     pathology!:string
 
     @ApiProperty({
@@ -64,6 +68,7 @@ export class CreatePatientDto{
     })
     @IsPhoneNumber("BR")
     @IsNotEmpty()
+    @MaxLength(20)
     phone!:string
 
     @ApiProperty({

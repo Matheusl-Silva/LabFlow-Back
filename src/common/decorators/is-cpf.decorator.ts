@@ -1,4 +1,4 @@
-import { registerDecorator, ValidationOptions } from "@nestjs/class-validator";
+import { registerDecorator, ValidationOptions } from "class-validator";
 import { isValidCPF } from "../validators/cpf.validator";
 
 export function IsCPF(options?: ValidationOptions){

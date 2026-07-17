@@ -1,5 +1,6 @@
 import {
   Column,
+  DeleteDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -106,4 +107,9 @@ export class Anamnesis {
 
   @Column({ type: 'timestamp' })
   date!: Date;
+
+  // Soft delete: registro clínico não é removido fisicamente (retenção legal).
+  // O TypeORM passa a esconder os registros com deleted_at != null.
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt?: Date | null;
 }
