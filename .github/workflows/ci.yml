@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-e-smoke:
+    name: Build, migrations e smoke test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: labflow
+          POSTGRES_PASSWORD: labflow
+          POSTGRES_DB: labflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U labflow -d labflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      MAIN_DB_URL: postgresql://labflow:labflow@localhost:5432/labflow
+      JWT_SECRET: ci-only-secret-nao-usar-em-producao-0123456789
+      FRONT_URL: http://localhost:3001
+      PORT: 3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Compilar
+        run: npm run build
+
+      - name: Rodar migrations
+        run: npm run migration:run
+
+      - name: Subir a aplicação
+        run: |
+          node dist/main.js > app.log 2>&1 &
+          echo $! > app.pid
+
+          # Espera o servidor responder (Swagger fica em /api/docs fora de produção)
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/docs || true)
+            if [ "$code" = "200" ]; then
+              echo "Aplicação de pé (tentativa $i)."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "::error::Aplicação não subiu em 30s"
+          cat app.log
+          exit 1
+
+      - name: Smoke test — validação e fluxo de auth
+        run: |
+          set -e
+
+          # 1) Senha fraca deve ser rejeitada pelo servidor (400)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/auth/signup \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI","email":"ci@teste.com","pass":"1"}')
+          if [ "$code" != "400" ]; then
+            echo "::error::Senha fraca deveria retornar 400, retornou $code"
+            cat app.log; exit 1
+          fi
+          echo "OK: senha fraca rejeitada (400)"
+
+          # 2) Primeiro cadastro do sistema vira admin ativo (201)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/auth/signup \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI Admin","email":"ci@teste.com","pass":"Password123"}')
+          if [ "$code" != "201" ]; then
+            echo "::error::Signup válido deveria retornar 201, retornou $code"
+            cat app.log; exit 1
+          fi
+          echo "OK: signup do primeiro usuário (201)"
+
+          # 3) Login do primeiro usuário funciona e retorna token (conta ativa)
+          body=$(curl -s -X POST http://localhost:3000/auth/signin \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@teste.com","pass":"Password123"}')
+          echo "$body" | grep -q '"token"' || {
+            echo "::error::Signin não retornou token: $body"
+            cat app.log; exit 1
+          }
+          echo "OK: signin retornou token"
+
+          # 4) Segundo cadastro nasce pendente: signin deve retornar 403
+          curl -s -o /dev/null -X POST http://localhost:3000/auth/signup \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI Comum","email":"ci2@teste.com","pass":"Password123"}'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/auth/signin \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci2@teste.com","pass":"Password123"}')
+          if [ "$code" != "403" ]; then
+            echo "::error::Conta pendente deveria retornar 403 no signin, retornou $code"
+            cat app.log; exit 1
+          fi
+          echo "OK: conta pendente bloqueada no login (403)"
+
+      - name: Logs da aplicação (em caso de falha)
+        if: failure()
+        run: cat app.log || true
+
+      - name: Encerrar aplicação
+        if: always()
+        run: kill "$(cat app.pid)" 2>/dev/null || true
