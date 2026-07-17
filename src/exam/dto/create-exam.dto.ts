@@ -1,4 +1,4 @@
-import { IsDateString, IsInt, IsObject } from '@nestjs/class-validator';
+import { IsDateString, IsInt, IsObject } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateExamDto {

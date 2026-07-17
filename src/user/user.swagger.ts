@@ -28,10 +28,22 @@ export const UserSwagger = {
             ApiResponse({ status: 404, description: 'Usuário não encontrado' }),
         ),
 
+    createUser: () =>
+        applyDecorators(
+            SwaggerAdmin(),
+            ApiOperation({ summary: 'Criar usuário (admin) — nasce ativo, sem aprovação' }),
+            ApiResponse({
+                status: 201,
+                description: 'Usuário criado com sucesso',
+                type: User,
+            }),
+            ApiResponse({ status: 409, description: 'Usuário já cadastrado' }),
+        ),
+
     updateUser: () =>
         applyDecorators(
             SwaggerAdmin(),
-            ApiOperation({ summary: 'Atualizar dados de usuário' }),
+            ApiOperation({ summary: 'Atualizar dados de usuário (inclui aprovar/desativar via isActive)' }),
             ApiParam({ name: 'id', description: 'ID do usuário', type: Number }),
             ApiResponse({
                 status: 200,

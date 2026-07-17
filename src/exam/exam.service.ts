@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Exam } from '../entities/exam.entity';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { isValidExam } from './validators/exam.validator';
 import { ExamTemplate } from '../entities/exam-template.entity';
@@ -22,7 +22,16 @@ export class ExamService {
     if(!isValidExam(dto.data, template.schema)) throw new BadRequestException("The exam does not follow it's schema");
 
     const exam = this.repo.create(dto);
-    return this.repo.save(exam);
+    try {
+      return await this.repo.save(exam);
+    } catch (err) {
+      // FK inexistente (patient_id, preceptor_id ou responsible_id): responde 400
+      // em vez de deixar o erro de banco virar 500.
+      if (err instanceof QueryFailedError && err.driverError?.code === '23503') {
+        throw new BadRequestException('Paciente, preceptor ou responsável inexistente');
+      }
+      throw err;
+    }
   }
 
   async get(): Promise<Exam[]> {
@@ -100,9 +109,16 @@ export class ExamService {
   
     if(dto.data && !isValidExam(dto.data, template.schema)) throw new BadRequestException("The exam does not follow it's schema");
 
-    const result = await this.repo.update(id, dto);
-
-    return (result.affected ?? 0) > 0;
+    try {
+      const result = await this.repo.update(id, dto);
+      return (result.affected ?? 0) > 0;
+    } catch (err) {
+      // FK inexistente (preceptor_id ou responsible_id): 400 em vez de 500.
+      if (err instanceof QueryFailedError && err.driverError?.code === '23503') {
+        throw new BadRequestException('Preceptor ou responsável inexistente');
+      }
+      throw err;
+    }
   }
 
   async softDelete(id: number): Promise<boolean>{

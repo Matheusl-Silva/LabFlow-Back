@@ -9,6 +9,7 @@ import { PatientModule } from './patient/patient.module';
 import { ExamTemplateModule } from './exam-template/exam-template.module';
 import { ExamModule } from './exam/exam.module';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { JwtGuard } from './common/guards/jwt.guard';
 import { AdminGuard } from './common/guards/admin.guard';
 import { AnamnesisModule } from './anamnesis/anamnesis.module';
@@ -18,6 +19,14 @@ import { AnamnesisModule } from './anamnesis/anamnesis.module';
     ConfigModule.forRoot({
       isGlobal: true
     }),
+    // Limite global de requisições por IP: 100 req/min. Rotas sensíveis (login)
+    // sobrescrevem com um limite mais rígido via @Throttle no próprio handler.
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 100,
+      },
+    ]),
     MainDatabase,
     UserModule,
     PatientModule,
@@ -28,6 +37,9 @@ import { AnamnesisModule } from './anamnesis/anamnesis.module';
   controllers: [AppController],
   providers: [
     AppService,
+    // ThrottlerGuard primeiro: barra o excesso de requisições antes mesmo de
+    // gastar CPU validando JWT.
+    {provide: APP_GUARD, useClass: ThrottlerGuard},
     {provide: APP_GUARD, useClass: JwtGuard},
     {provide: APP_GUARD, useClass: AdminGuard}
   ],

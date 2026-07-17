@@ -1,4 +1,8 @@
-import { PartialType } from '@nestjs/swagger';
+import { OmitType, PartialType } from '@nestjs/swagger';
 import { CreateAnamnesisDto } from './create-anamnesis.dto';
 
-export class UpdateAnamnesisDto extends PartialType(CreateAnamnesisDto) {}
+// `patientId` é omitido: uma anamnese não pode ser movida de paciente via update
+// (mesmo padrão do UpdateExamDto).
+export class UpdateAnamnesisDto extends PartialType(
+  OmitType(CreateAnamnesisDto, ['patientId'] as const),
+) {}

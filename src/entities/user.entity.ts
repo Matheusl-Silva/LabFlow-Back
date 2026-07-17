@@ -31,6 +31,12 @@ export class User {
   @Column({name: 'is_admin', default: false})
   isAdmin!: boolean;
 
+  // Aprovação de admin: quem se auto-cadastra nasce inativo e não consegue
+  // logar até um administrador aprovar. Usuários criados diretamente por um
+  // admin já nascem ativos.
+  @Column({name: 'is_active', default: false})
+  isActive!: boolean;
+
   @CreateDateColumn({name: 'created_at'})
   createdAt!: Date;
 

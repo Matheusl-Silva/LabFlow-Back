@@ -2,15 +2,19 @@ import {
   Body,
   Controller,
   Get,
+  Post,
   Put,
   Delete,
   Param,
   ParseIntPipe,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { QueryFailedError } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { UserService } from './user.service';
+import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserSwagger } from './user.swagger';
 import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
@@ -41,6 +45,20 @@ export class UserController {
   async getById(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: JwtPayload): Promise<User | null> {
     if(!user.isAdmin && user.id !== id) throw new ForbiddenException();
     return await this.userService.getById(id);
+  }
+
+  @UserSwagger.createUser()
+  @Post()
+  async create(@Body() dto: CreateUserDto): Promise<User> {
+    try {
+      return await this.userService.create(dto);
+    } catch (err) {
+      console.error(err);
+      if (err instanceof QueryFailedError && err.driverError.code == '23505') {
+        throw new ConflictException('User already registered');
+      }
+      throw err;
+    }
   }
 
   @UserSwagger.updateUser()

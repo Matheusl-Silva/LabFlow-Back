@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 import { User } from '../entities/user.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,9 +21,26 @@ export class UserService {
     name: true,
     email: true,
     isAdmin: true,
+    isActive: true,
     createdAt: true,
     updatedAt: true,
   } as const;
+
+  /** Criação por administrador: o usuário nasce ativo. */
+  async create(dto: CreateUserDto): Promise<User> {
+    const { pass, isAdmin, ...remainingData } = dto;
+    const newUser = this.userRepo.create({
+      ...remainingData,
+      passwordHash: await hash(pass),
+      isAdmin: isAdmin ?? false,
+      isActive: true,
+    });
+    const saved = await this.userRepo.save(newUser);
+    return this.userRepo.findOneOrFail({
+      where: { id: saved.id },
+      select: UserService.PUBLIC_FIELDS,
+    });
+  }
 
   get(): Promise<User[]> {
     return this.userRepo.find({ select: UserService.PUBLIC_FIELDS });

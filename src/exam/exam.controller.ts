@@ -45,14 +45,14 @@ export class ExamController {
     @ExamSwagger.updateExam()
     @Put(':id')
     async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateExamDto): Promise<{message: string}>{
-        this.service.update(id, dto);
+        await this.service.update(id, dto);
         return {message: "Exam has been updated successfully"};
     }
 
     @ExamSwagger.deleteExam()
     @Delete(':id')
     async softDelete(@Param('id', ParseIntPipe) id: number): Promise<{message: string}>{
-        this.service.softDelete(id);
+        await this.service.softDelete(id);
         return {message: "Exam has been deleted successfully"};
     }
 }

@@ -24,6 +24,7 @@ services:
       MAIN_DB_URL: "postgresql://${MAIN_DB_USER}:${MAIN_DB_PASSWORD}@db:5432/${MAIN_DB}"
       PORT: ${PORT}
       JWT_SECRET: ${JWT_SECRET}
+      FRONT_URL: ${FRONT_URL}
     restart: always
   db:
     image: postgres

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsInt, IsString } from '@nestjs/class-validator';
+import { IsNotEmpty, IsInt, IsString, MaxLength } from 'class-validator';
 import { IsSchema } from '../validators/exam-template.decorators';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -9,6 +9,7 @@ export class CreateExamTemplateDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(120)
   name!: string;
 
   @ApiProperty({

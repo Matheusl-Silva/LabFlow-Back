@@ -35,7 +35,9 @@ export class AnamnesisService {
   }
 
   async delete(id: number): Promise<boolean> {
-    const result = await this.repo.delete(id);
+    // Soft delete: preserva o registro clínico (marca deleted_at) em vez de
+    // apagar a linha.
+    const result = await this.repo.softDelete(id);
     if(!result.affected) throw new NotFoundException('Anamnesis not found');
     return (result.affected ?? 0) > 0;
   }
