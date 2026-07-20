@@ -25,14 +25,23 @@ services:
       PORT: ${PORT}
       JWT_SECRET: ${JWT_SECRET}
       FRONT_URL: ${FRONT_URL}
+      # Fuso do processo Node: node-postgres usa este TZ para converter as
+      # colunas `timestamp without time zone` (grava/lê no horário de Brasília).
+      TZ: America/Sao_Paulo
     restart: always
   db:
     image: postgres
     restart: unless-stopped
+    # `-c timezone`: define o fuso PADRÃO DO SERVIDOR, herdado por TODA sessão —
+    # inclusive a do node-postgres (que ignora PGTZ/TZ). É o que faz
+    # `now()`/CURRENT_TIMESTAMP (created_at/updated_at) gravarem no horário de
+    # Brasília em vez de UTC. Sem isso, só o psql (libpq) via PGTZ ficava certo.
+    command: ["postgres", "-c", "timezone=America/Sao_Paulo"]
     environment:
       POSTGRES_USER: ${MAIN_DB_USER}
       POSTGRES_PASSWORD: ${MAIN_DB_PASSWORD}
       POSTGRES_DB: ${MAIN_DB}
+      TZ: America/Sao_Paulo
     ports:
       - '${MAIN_DB_PORT}:5432'
     volumes:
