@@ -14,6 +14,7 @@ import { JwtGuard } from './common/guards/jwt.guard';
 import { AdminGuard } from './common/guards/admin.guard';
 import { AnamnesisModule } from './anamnesis/anamnesis.module';
 import { AuditModule } from './audit/audit.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { AuditModule } from './audit/audit.module';
     ExamModule,
     AuthModule,
     AnamnesisModule,
-    AuditModule],
+    AuditModule,
+    SettingsModule],
   controllers: [AppController],
   providers: [
     AppService,
