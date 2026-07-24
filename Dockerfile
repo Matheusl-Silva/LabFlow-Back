@@ -18,4 +18,6 @@ RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 
 EXPOSE 3000
-CMD ["node", "dist/main"]
+# start:prod roda as migrations pendentes (idempotente) e só então sobe a API.
+# O CLI JS do TypeORM está disponível porque `typeorm` é dependency de produção.
+CMD ["npm", "run", "start:prod"]
