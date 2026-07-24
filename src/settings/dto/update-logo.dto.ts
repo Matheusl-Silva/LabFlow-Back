@@ -1,5 +1,6 @@
 import { IsBase64, IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsImageMatchingMime } from '../validators/is-image-matching-mime.validator';
 
 /** Mime-types aceitos para a logo — raster inerte, sem SVG. */
 export const ALLOWED_LOGO_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
@@ -17,6 +18,9 @@ export class UpdateLogoDto {
   @IsNotEmpty()
   @IsBase64()
   @MaxLength(MAX_LOGO_BASE64_LENGTH, { message: 'A logo excede o tamanho máximo de 512 KB.' })
+  @IsImageMatchingMime('logoMime', {
+    message: 'O conteúdo enviado não corresponde a uma imagem válida do formato informado.',
+  })
   logoBase64!: string;
 
   @ApiProperty({
