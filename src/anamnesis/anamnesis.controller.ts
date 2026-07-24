@@ -3,14 +3,16 @@ import { AnamnesisService } from './anamnesis.service';
 import { CreateAnamnesisDto } from './dto/create-anamnesis.dto';
 import { UpdateAnamnesisDto } from './dto/update-anamnesis.dto';
 import { Anamnesis } from '../entities/anamnesis.entity';
+import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
+import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @Controller('anamnesis')
 export class AnamnesisController {
   constructor(private readonly anamnesisService: AnamnesisService) {}
 
   @Post()
-  create(@Body() dto: CreateAnamnesisDto): Promise<Anamnesis> {
-    return this.anamnesisService.create(dto);
+  create(@Body() dto: CreateAnamnesisDto, @UserFromJwt() user: JwtPayload): Promise<Anamnesis> {
+    return this.anamnesisService.create(dto, user.id);
   }
 
   @Get(':id')
@@ -24,12 +26,12 @@ export class AnamnesisController {
   }
 
   @Put(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateAnamnesisDto): Promise<boolean> {
-    return this.anamnesisService.update(id, dto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateAnamnesisDto, @UserFromJwt() user: JwtPayload): Promise<boolean> {
+    return this.anamnesisService.update(id, dto, user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number): Promise<boolean> {
-    return this.anamnesisService.delete(id);
+  remove(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: JwtPayload): Promise<boolean> {
+    return this.anamnesisService.delete(id, user.id);
   }
 }

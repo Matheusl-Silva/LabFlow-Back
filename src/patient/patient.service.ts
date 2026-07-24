@@ -4,9 +4,24 @@ import { Repository } from "typeorm";
 import { UpdatePatientDto } from "./dto/update-patient.dto";
 import { InjectRepository } from "@nestjs/typeorm";
 import { CreatePatientDto } from "./dto/create-patient.dto";
+import { AuditService } from "../audit/audit.service";
+import { AuditAction, AuditEntity } from "../audit/audit.types";
 @Injectable()
 export class PatientService{
-    constructor(@InjectRepository(Patient) private readonly repo : Repository<Patient>){}
+    constructor(
+        @InjectRepository(Patient) private readonly repo : Repository<Patient>,
+        private readonly audit: AuditService,
+    ){}
+
+    /**
+     * Snapshot do paciente para auditoria SEM o CPF: é dado pessoal sensível
+     * (LGPD) e guardá-lo em texto no histórico de logs seria exposição
+     * desnecessária. O id do registro já identifica quem foi alterado.
+     */
+    private snapshot(patient: Patient): Record<string, unknown> {
+        const { cpf, ...rest } = patient;
+        return rest;
+    }
     
     get() : Promise<Patient[]>{
         return this.repo.find();
@@ -45,7 +60,7 @@ export class PatientService{
         return patient;
     }
 
-    async create(dto : CreatePatientDto) : Promise<Patient>{
+    async create(dto : CreatePatientDto, userId: number) : Promise<Patient>{
         // CPF é identidade nacional: mesmo CPF = mesma pessoa. Se já existe um
         // paciente ATIVO com esse CPF, é conflito real. Se existe um paciente
         // EXCLUÍDO (soft delete) com esse CPF, é a mesma pessoa voltando —
@@ -63,26 +78,63 @@ export class PatientService{
         if(deleted){
             await this.repo.update(deleted.id, dto); // sobrescreve com os dados do novo cadastro
             await this.repo.restore(deleted.id);     // deleted_at = null (reativa)
-            return this.repo.findOneByOrFail({id: deleted.id});
+            const restored = await this.repo.findOneByOrFail({id: deleted.id});
+            await this.audit.record({
+                action: AuditAction.CREATE, // registro voltando: tratamos como criação
+                entity: AuditEntity.PATIENT,
+                entityId: restored.id,
+                userId,
+                after: this.snapshot(restored),
+            });
+            return restored;
         }
 
         const patient = this.repo.create(dto);
-        return this.repo.save(patient);
+        const saved = await this.repo.save(patient);
+        await this.audit.record({
+            action: AuditAction.CREATE,
+            entity: AuditEntity.PATIENT,
+            entityId: saved.id,
+            userId,
+            after: this.snapshot(saved),
+        });
+        return saved;
     }
 
-    async update(id : number, dto : UpdatePatientDto) : Promise<boolean>{
+    async update(id : number, dto : UpdatePatientDto, userId: number) : Promise<boolean>{
         const patient = await this.repo.findOneBy({id});
         if(!patient) throw new NotFoundException('Patient not found');
+
+        const before = this.snapshot(patient);
         const result = await this.repo.update(patient.id, dto);
+        const after = await this.repo.findOneBy({id});
+        await this.audit.record({
+            action: AuditAction.UPDATE,
+            entity: AuditEntity.PATIENT,
+            entityId: id,
+            userId,
+            before,
+            after: after ? this.snapshot(after) : null,
+        });
 
         return (result.affected ?? 0) > 0;
     }
 
-    async delete(id : number) : Promise<boolean>{
+    async delete(id : number, userId: number) : Promise<boolean>{
+        const patient = await this.repo.findOneBy({id});
+        if(!patient) throw new NotFoundException('Patient not found');
+
         // Soft delete: marca deleted_at em vez de remover a linha, preservando
         // exames/anamneses vinculados (e as respectivas FKs).
         const result = await this.repo.softDelete(id);
         if(!result.affected) throw new NotFoundException('Patient not found');
+        await this.audit.record({
+            action: AuditAction.DELETE,
+            entity: AuditEntity.PATIENT,
+            entityId: id,
+            userId,
+            before: this.snapshot(patient),
+        });
         return (result.affected ?? 0) > 0;
     }
 }

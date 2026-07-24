@@ -6,6 +6,8 @@ import { CreateExamDto } from './dto/create-exam.dto';
 import { isValidExam } from './validators/exam.validator';
 import { ExamTemplate } from '../entities/exam-template.entity';
 import { UpdateExamDto } from './dto/update-exam.dto';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction, AuditEntity } from '../audit/audit.types';
 
 @Injectable()
 export class ExamService {
@@ -13,9 +15,10 @@ export class ExamService {
     @InjectRepository(Exam) private readonly repo: Repository<Exam>,
     @InjectRepository(ExamTemplate)
     private readonly templateRepo: Repository<ExamTemplate>,
+    private readonly audit: AuditService,
   ) {}
 
-  async create(dto: CreateExamDto): Promise<Exam> {
+  async create(dto: CreateExamDto, userId: number): Promise<Exam> {
     const template = await this.templateRepo.findOneBy({id: dto.examTemplateId});
     if(!template) throw new BadRequestException("Exam template does not exist");
 
@@ -23,7 +26,15 @@ export class ExamService {
 
     const exam = this.repo.create(dto);
     try {
-      return await this.repo.save(exam);
+      const saved = await this.repo.save(exam);
+      await this.audit.record({
+        action: AuditAction.CREATE,
+        entity: AuditEntity.EXAM,
+        entityId: saved.id,
+        userId,
+        after: { ...saved },
+      });
+      return saved;
     } catch (err) {
       // FK inexistente (patient_id, preceptor_id ou responsible_id): responde 400
       // em vez de deixar o erro de banco virar 500.
@@ -100,17 +111,28 @@ export class ExamService {
     return exam;
   }
 
-  async update(id: number, dto: UpdateExamDto){
+  async update(id: number, dto: UpdateExamDto, userId: number){
     const exam = await this.repo.findOneBy({id});
     if(!exam) throw new NotFoundException('Exam not found');
 
     const template = await this.templateRepo.findOneBy({id: exam.examTemplateId});
     if(!template) throw new InternalServerErrorException("Template not found");
-  
+
     if(dto.data && !isValidExam(dto.data, template.schema)) throw new BadRequestException("The exam does not follow it's schema");
+
+    const before = { ...exam }; // snapshot antes de alterar
 
     try {
       const result = await this.repo.update(id, dto);
+      const after = await this.repo.findOneBy({id});
+      await this.audit.record({
+        action: AuditAction.UPDATE,
+        entity: AuditEntity.EXAM,
+        entityId: id,
+        userId,
+        before,
+        after: after ? { ...after } : null,
+      });
       return (result.affected ?? 0) > 0;
     } catch (err) {
       // FK inexistente (preceptor_id ou responsible_id): 400 em vez de 500.
@@ -121,9 +143,18 @@ export class ExamService {
     }
   }
 
-  async softDelete(id: number): Promise<boolean>{
+  async softDelete(id: number, userId: number): Promise<boolean>{
+    const exam = await this.repo.findOneBy({id});
+    if(!exam) throw new NotFoundException("Exam not found");
+
     const result = await this.repo.softDelete(id);
-    if(!result.affected) throw new NotFoundException("Exam not found");
+    await this.audit.record({
+      action: AuditAction.DELETE,
+      entity: AuditEntity.EXAM,
+      entityId: id,
+      userId,
+      before: { ...exam },
+    });
     return (result.affected ?? 0) > 0;
   }
 }
