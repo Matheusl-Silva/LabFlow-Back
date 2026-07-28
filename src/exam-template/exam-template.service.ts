@@ -57,29 +57,25 @@ export class ExamTemplateService{
                                             .select('MAX(et.version)', 'max')
                                             .where('et.name = :name', {name: activeTemplate.name})
                                             .getRawOne<{max: number}>();
-            const newVersionDto : CreateExamTemplateDto = {...dto, name: activeTemplate.name, version: (latestVersion?.max ?? activeTemplate.version) + 1}
+            const newVersionDto : CreateExamTemplateDto = {...dto, name: dto.name ?? activeTemplate.name, version: (latestVersion?.max ?? activeTemplate.version) + 1}
             const created = repo.create(newVersionDto);
             const saved = await repo.save(created);
 
             return { oldTemplate: before, newTemplate: saved };
         });
 
-        // Auditoria fora da transação: a versão anterior foi desativada (UPDATE)
-        // e uma nova versão foi criada (CREATE).
+        // Para o usuário, versionar é apenas "editar o modelo". A troca de versão
+        // (desativar a atual + criar a próxima com id novo) é mecânica interna,
+        // então gravamos UM ÚNICO evento de edição, com o snapshot enxuto do que
+        // o usuário de fato mexe: nome e campos. Sem id/versão/timestamps, para
+        // não vazar o funcionamento por baixo dos panos no log.
         await this.audit.record({
             action: AuditAction.UPDATE,
             entity: AuditEntity.EXAM_TEMPLATE,
             entityId: id,
             userId,
-            before: oldTemplate,
-            after: { ...oldTemplate, active: false },
-        });
-        await this.audit.record({
-            action: AuditAction.CREATE,
-            entity: AuditEntity.EXAM_TEMPLATE,
-            entityId: newTemplate.id,
-            userId,
-            after: { ...newTemplate },
+            before: { name: oldTemplate.name, schema: oldTemplate.schema },
+            after: { name: newTemplate.name, schema: newTemplate.schema },
         });
 
         return newTemplate;
