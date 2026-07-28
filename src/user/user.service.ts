@@ -1,8 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { User } from '../entities/user.entity';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { hash } from 'argon2';
 import { JwtService } from '@nestjs/jwt';
@@ -65,6 +69,14 @@ export class UserService {
 
     if (!user) throw new NotFoundException('User not found');
 
+    // Um administrador ativo deixaria de sê-lo se fosse rebaixado (isAdmin=false)
+    // ou desativado (isActive=false). Nesses casos, não pode ser o último.
+    const nextIsAdmin = dto.isAdmin ?? user.isAdmin;
+    const nextIsActive = dto.isActive ?? user.isActive;
+    if (this.countsAsAdmin(user) && !(nextIsAdmin && nextIsActive)) {
+      await this.assertNotLastAdmin(user.id);
+    }
+
     const { pass, ...remainingData } = dto;
     const newData: any = { ...remainingData };
 
@@ -76,6 +88,12 @@ export class UserService {
   }
 
   async delete(id: number): Promise<boolean> {
+    const user = await this.userRepo.findOneBy({ id });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    if (this.countsAsAdmin(user)) await this.assertNotLastAdmin(user.id);
+
     // Soft delete: marca deleted_at em vez de remover a linha, preservando os
     // exames em que o usuário foi preceptor/responsável (e as FKs).
     const result = await this.userRepo.softDelete({ id });
@@ -83,5 +101,25 @@ export class UserService {
     if(!result.affected) throw new NotFoundException("User not found");
 
     return true;
+  }
+
+  /** Só conta como administrador do sistema quem é admin E está ativo. */
+  private countsAsAdmin(user: User): boolean {
+    return user.isAdmin && user.isActive;
+  }
+
+  /**
+   * Garante que existe outro administrador ativo além de `excludeId`. O sistema
+   * nunca pode ficar sem nenhum administrador que consiga logar.
+   */
+  private async assertNotLastAdmin(excludeId: number): Promise<void> {
+    const otherAdmins = await this.userRepo.count({
+      where: { id: Not(excludeId), isAdmin: true, isActive: true },
+    });
+    if (otherAdmins === 0) {
+      throw new ConflictException(
+        'Não é possível remover o último administrador ativo do sistema.',
+      );
+    }
   }
 }
