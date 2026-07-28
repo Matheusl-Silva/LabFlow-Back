@@ -13,6 +13,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { JwtGuard } from './common/guards/jwt.guard';
 import { AdminGuard } from './common/guards/admin.guard';
 import { AnamnesisModule } from './anamnesis/anamnesis.module';
+import { AuditModule } from './audit/audit.module';
 import { SettingsModule } from './settings/settings.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { SettingsModule } from './settings/settings.module';
     ExamModule,
     AuthModule,
     AnamnesisModule,
+    AuditModule,
     SettingsModule],
   controllers: [AppController],
   providers: [

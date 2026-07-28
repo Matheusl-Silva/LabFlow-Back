@@ -16,6 +16,8 @@ import { CreateNewVersionExamTemplateDto } from './dto/create-new-version-exam-t
 import { UpdateExamTemplateDto } from './dto/update-exam-template.dto';
 import { ExamTemplateSwagger } from './exam-template.swagger';
 import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
+import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
+import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Templates de Exame')
 @Controller('/template')
@@ -46,8 +48,11 @@ export class ExamTemplateController {
 
   @ExamTemplateSwagger.createTemplate()
   @Post()
-  async create(@Body() dto: CreateExamTemplateDto): Promise<ExamTemplate> {
-    return this.service.create(dto);
+  async create(
+    @Body() dto: CreateExamTemplateDto,
+    @UserFromJwt() user: JwtPayload,
+  ): Promise<ExamTemplate> {
+    return this.service.create(dto, user.id);
   }
 
   @ExamTemplateSwagger.createNewVersion()
@@ -55,8 +60,9 @@ export class ExamTemplateController {
   async createNewVersion(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateNewVersionExamTemplateDto,
+    @UserFromJwt() user: JwtPayload,
   ): Promise<ExamTemplate> {
-    return this.service.createNewVersion(id, dto);
+    return this.service.createNewVersion(id, dto, user.id);
   }
 
   @ExamTemplateSwagger.updateTemplate()
@@ -64,15 +70,19 @@ export class ExamTemplateController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateExamTemplateDto,
+    @UserFromJwt() user: JwtPayload,
   ): Promise<{message: string}> {
-    await this.service.update(id, dto);
+    await this.service.update(id, dto, user.id);
     return {message: "Exam template has been updated successfully"}
   }
 
   @ExamTemplateSwagger.deleteTemplate()
   @Delete(':id')
-  async softDelete(@Param('id', ParseIntPipe) id: number): Promise<{message: string}>{
-    await this.service.softDelete(id);
+  async softDelete(
+    @Param('id', ParseIntPipe) id: number,
+    @UserFromJwt() user: JwtPayload,
+  ): Promise<{message: string}>{
+    await this.service.softDelete(id, user.id);
     return {message: 'Exam template has been deleted successfully'};
   }
 }

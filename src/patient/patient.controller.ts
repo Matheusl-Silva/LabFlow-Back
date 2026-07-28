@@ -54,9 +54,12 @@ export class PatientController {
 
   @PatientSwagger.createPatient()
   @Post()
-  async create(@Body() dto: CreatePatientDto): Promise<Patient> {
+  async create(
+    @Body() dto: CreatePatientDto,
+    @UserFromJwt() user: JwtPayload,
+  ): Promise<Patient> {
     try {
-      return await this.patientService.create(dto);
+      return await this.patientService.create(dto, user.id);
     } catch (err) {
       console.error(err);
       if (err instanceof QueryFailedError && err.driverError.code == '23505') {
@@ -71,9 +74,10 @@ export class PatientController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdatePatientDto,
+    @UserFromJwt() user: JwtPayload,
   ): Promise<{message: string}> {
     try {
-      await this.patientService.update(id, dto);
+      await this.patientService.update(id, dto, user.id);
       return {message: "Patient has been updated successfully"}
     } catch (err) {
       console.error(err);
@@ -83,9 +87,12 @@ export class PatientController {
 
   @PatientSwagger.deletePatient()
   @Delete(':id')
-  async delete(@Param('id', ParseIntPipe) id: number): Promise<boolean> {
+  async delete(
+    @Param('id', ParseIntPipe) id: number,
+    @UserFromJwt() user: JwtPayload,
+  ): Promise<boolean> {
     try{
-      return await this.patientService.delete(id);
+      return await this.patientService.delete(id, user.id);
     }catch(err){
       console.error(err);
       throw err;

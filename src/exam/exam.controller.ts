@@ -38,21 +38,21 @@ export class ExamController {
     @ExamSwagger.createExam()
     @AllowCommonUser()
     @Post()
-    async create(@Body() dto: CreateExamDto): Promise<Exam>{
-        return this.service.create(dto);
+    async create(@Body() dto: CreateExamDto, @UserFromJwt() user: JwtPayload): Promise<Exam>{
+        return this.service.create(dto, user.id);
     }
 
     @ExamSwagger.updateExam()
     @Put(':id')
-    async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateExamDto): Promise<{message: string}>{
-        await this.service.update(id, dto);
+    async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateExamDto, @UserFromJwt() user: JwtPayload): Promise<{message: string}>{
+        await this.service.update(id, dto, user.id);
         return {message: "Exam has been updated successfully"};
     }
 
     @ExamSwagger.deleteExam()
     @Delete(':id')
-    async softDelete(@Param('id', ParseIntPipe) id: number): Promise<{message: string}>{
-        await this.service.softDelete(id);
+    async softDelete(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: JwtPayload): Promise<{message: string}>{
+        await this.service.softDelete(id, user.id);
         return {message: "Exam has been deleted successfully"};
     }
 }
