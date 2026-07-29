@@ -123,3 +123,98 @@ jobs:
       - name: Encerrar aplicação
         if: always()
         run: kill "$(cat app.pid)" 2>/dev/null || true
+
+  versionar:
+    name: Calcular versão (semantic-release)
+    runs-on: ubuntu-latest
+
+    # Só versiona depois que build, migrations e smoke test passaram, e apenas
+    # em push direto na main — PR não deve criar release nem tag.
+    needs: build-e-smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: write # criar a tag git e o release
+      issues: write # comentar nas issues incluídas no release
+      pull-requests: write
+
+    outputs:
+      # Fica vazio quando nenhum commit desde a última tag gera release
+      # (ex.: só `ci:` ou `cleanup:`). O job seguinte trata esse caso.
+      versao: ${{ steps.semantic.outputs.versao }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # semantic-release precisa do histórico e das tags
+          persist-credentials: false
+
+      - name: Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Rodar semantic-release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx --yes \
+            -p semantic-release@24 \
+            -p @semantic-release/commit-analyzer \
+            -p @semantic-release/release-notes-generator \
+            -p @semantic-release/github \
+            -p @semantic-release/exec \
+            semantic-release
+
+  publicar-imagem:
+    name: Publicar imagem no Docker Hub
+    runs-on: ubuntu-latest
+    needs: versionar
+
+    env:
+      IMAGE: matheus05/labflow-back
+      VERSAO: ${{ needs.versionar.outputs.versao }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Montar lista de tags
+        id: tags
+        run: |
+          # `latest` acompanha a main; a tag com o SHA permite voltar atrás para
+          # um commit exato. A tag de versão só existe quando houve release.
+          TAGS="${IMAGE}:latest,${IMAGE}:${GITHUB_SHA}"
+          if [ -n "$VERSAO" ]; then
+            TAGS="${TAGS},${IMAGE}:${VERSAO}"
+            echo "Release ${VERSAO} — publicando tag de versão."
+          else
+            echo "Nenhum release neste push; publicando apenas latest e SHA."
+          fi
+          echo "lista=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build e push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.lista }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Resumo
+        run: |
+          echo "### Imagem publicada" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.tags.outputs.lista }}" | tr ',' '\n' \
+            | sed 's/^/- `/; s/$/`/' >> "$GITHUB_STEP_SUMMARY"
