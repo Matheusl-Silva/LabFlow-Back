@@ -4,12 +4,15 @@ import { Exam } from '../entities/exam.entity';
 import { ExamService } from './exam.service';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
-import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
+import { hasRole } from '../common/utils/has-role';
 import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
 import { ExamSwagger } from './exam.swagger';
 import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Exames')
+@Roles(Role.EXAMS)
 @Controller('exam')
 export class ExamController {
     constructor(private readonly service: ExamService){}
@@ -21,22 +24,21 @@ export class ExamController {
     }
 
     @ExamSwagger.findExamById()
-    @AllowCommonUser()
     @Get(':id')
     async getById(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: JwtPayload): Promise<Exam | null>{
-        if(user.isAdmin) return this.service.getById(id);
+        // Resultado completo só para quem cuida do paciente; para os demais,
+        // a versão sem os dados identificadores.
+        if(hasRole(user, Role.PATIENTS)) return this.service.getById(id);
         return this.service.getPrivateById(id);
     }
 
     @ExamSwagger.findExamsByPatientId()
-    @AllowCommonUser()
     @Get('/patient/:id')
     async getByPatientId(@Param('id', ParseIntPipe) patientId: number): Promise<Exam[]>{
         return this.service.getByPatientId(patientId);
     }
 
     @ExamSwagger.createExam()
-    @AllowCommonUser()
     @Post()
     async create(@Body() dto: CreateExamDto, @UserFromJwt() user: JwtPayload): Promise<Exam>{
         return this.service.create(dto, user.id);

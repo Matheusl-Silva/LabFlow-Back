@@ -9,6 +9,7 @@ import {
   OneToMany
 } from 'typeorm';
 import { Exam } from './exam.entity';
+import { UserRole } from './user-role.entity';
 
 @Entity({ name: 'users', database: process.env.MAIN_DB })
 // Unicidade só entre usuários ATIVOS: o e-mail de um usuário excluído fica livre
@@ -28,6 +29,10 @@ export class User {
   @Column()
   passwordHash!: string;
 
+  // Coluna DERIVADA de `roles`: vale `true` exatamente quando o usuário tem o
+  // papel ADMIN. Mantida em sincronia pelo UserService/AuthService porque é
+  // muito mais barata nas consultas de "existe admin ativo?" do que um join.
+  // A autorização em si lê os papéis, não esta coluna.
   @Column({name: 'is_admin', default: false})
   isAdmin!: boolean;
 
@@ -47,6 +52,9 @@ export class User {
   // continuam válidas). O TypeORM esconde os registros com deleted_at != null.
   @DeleteDateColumn({name: 'deleted_at'})
   deletedAt!: Date | null;
+
+  @OneToMany(() => UserRole, (userRole) => userRole.user, { cascade: true })
+  roles!: UserRole[]
 
   @OneToMany(() => Exam, (exam) => exam.preceptor)
   examsAsPreceptor!: Exam[]

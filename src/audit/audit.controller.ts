@@ -3,7 +3,9 @@ import { ApiTags } from '@nestjs/swagger';
 import { AuditService } from './audit.service';
 import { QueryAuditLogDto } from './dto/query-audit-log.dto';
 
-// SEM @AllowCommonUser(): o AdminGuard global já barra usuário comum (403).
+// SEM decorator de papel: o RolesGuard é fail-closed, então a rota já é
+// exclusiva de administrador. Auditoria é administração do sistema e não vira
+// papel delegável.
 @ApiTags('Auditoria')
 @Controller('audit-log')
 export class AuditController {

@@ -18,26 +18,26 @@ import { CreateStockItemDto } from './dto/create-stock-item.dto';
 import { UpdateStockItemDto } from './dto/update-stock-item.dto';
 import { AdjustStockQuantityDto } from './dto/adjust-stock-quantity.dto';
 import { StockSwagger } from './stock.swagger';
-import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
 import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
 import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Estoque')
+// Papel STOCK dá acesso ao módulo inteiro: consultar, cadastrar, editar,
+// movimentar e excluir. O ADMIN passa em tudo, como em qualquer rota.
+@Roles(Role.STOCK)
 @Controller('stock')
 export class StockController {
   constructor(private readonly stockService: StockService) {}
 
-  // Consultar o estoque é rotina de bancada: qualquer usuário autenticado vê a
-  // lista. Cadastrar, editar e excluir itens continua restrito ao admin.
   @StockSwagger.findItems()
-  @AllowCommonUser()
   @Get()
   async get(): Promise<StockItem[]> {
     return this.stockService.get();
   }
 
   @StockSwagger.findItemById()
-  @AllowCommonUser()
   @Get(':id')
   async getById(@Param('id', ParseIntPipe) id: number): Promise<StockItem> {
     return this.stockService.getById(id);
@@ -78,10 +78,7 @@ export class StockController {
     }
   }
 
-  // Movimentar quantidade é liberado ao usuário comum: quem consome o material
-  // na bancada é quem precisa dar baixa. Alterar o cadastro do item, não.
   @StockSwagger.adjustQuantity()
-  @AllowCommonUser()
   @Patch(':id/quantity')
   async adjustQuantity(
     @Param('id', ParseIntPipe) id: number,
