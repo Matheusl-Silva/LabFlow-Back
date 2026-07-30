@@ -9,4 +9,5 @@ export enum AuditEntity {
   EXAM_TEMPLATE = 'exam_template',
   PATIENT = 'patient',
   ANAMNESIS = 'anamnesis',
+  STOCK_ITEM = 'stock_item',
 }

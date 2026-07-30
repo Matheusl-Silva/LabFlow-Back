@@ -15,6 +15,7 @@ import { AdminGuard } from './common/guards/admin.guard';
 import { AnamnesisModule } from './anamnesis/anamnesis.module';
 import { AuditModule } from './audit/audit.module';
 import { SettingsModule } from './settings/settings.module';
+import { StockModule } from './stock/stock.module';
 
 @Module({
   imports: [
@@ -37,7 +38,8 @@ import { SettingsModule } from './settings/settings.module';
     AuthModule,
     AnamnesisModule,
     AuditModule,
-    SettingsModule],
+    SettingsModule,
+    StockModule],
   controllers: [AppController],
   providers: [
     AppService,
