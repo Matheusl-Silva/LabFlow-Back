@@ -22,25 +22,34 @@ import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Templates de Exame')
 // Modelos de exame são configuração: só o papel EXAM_TEMPLATES mexe neles.
-// Quem tem apenas EXAMS lança exames, mas não altera a estrutura dos modelos.
+// Quem tem apenas EXAMS lança exames, mas não altera a estrutura dos modelos —
+// os @Roles nos handlers de leitura abrem a consulta, não a escrita.
 @Roles(Role.EXAM_TEMPLATES)
 @Controller('/template')
 export class ExamTemplateController {
   constructor(private readonly service: ExamTemplateService) {}
 
+  // Leitura liberada ao papel EXAMS: sem a lista de modelos ativos não há o que
+  // escolher na hora de lançar um exame — quem só lança ficava sem cadastrar.
   @ExamTemplateSwagger.findActiveTemplates()
+  @Roles(Role.EXAM_TEMPLATES, Role.EXAMS)
   @Get()
   async getActives(): Promise<ExamTemplate[]> {
     return await this.service.getActives();
   }
 
+  // `/all` continua restrito: traz também as versões desativadas, que só
+  // interessam a quem administra os modelos.
   @ExamTemplateSwagger.findAllTemplates()
   @Get('/all')
   async getAll(): Promise<ExamTemplate[]> {
     return this.service.getAll();
   }
 
+  // Idem `getActives`: é daqui que sai o schema de campos do formulário de
+  // lançamento do exame.
   @ExamTemplateSwagger.findTemplateById()
+  @Roles(Role.EXAM_TEMPLATES, Role.EXAMS)
   @Get('/:id')
   async getById(
     @Param('id', ParseIntPipe) id: number,

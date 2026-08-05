@@ -106,10 +106,10 @@ não corresponde a nenhuma necessidade concreta hoje.
 > **Exceção nos exames** (review do PR #10): aqui a necessidade concreta
 > apareceu — o laboratório quer um operador que *lance* exames sem poder
 > *editar* o que já foi registrado nem mexer nos modelos. Por isso o módulo de
-> exames tem dois papéis: `EXAMS` (create + read) e `EXAM_TEMPLATES`
-> (edit/delete de exames + CRUD de modelos). É a única quebra da regra
-> "papel = módulo inteiro", e existe porque há um caso de uso real por trás
-> dela, não por simetria.
+> exames tem dois papéis: `EXAMS` (create + read, **incluindo leitura dos
+> modelos ativos**) e `EXAM_TEMPLATES` (edit/delete de exames + CRUD de
+> modelos). É a única quebra da regra "papel = módulo inteiro", e existe porque
+> há um caso de uso real por trás dela, não por simetria.
 
 Duas exceções que continuam amarradas ao `ADMIN`, independentemente de papel:
 
@@ -227,7 +227,8 @@ hoje admin-only que passam a ser delegáveis:
 | `stock` PATCH quantity | `@AllowCommonUser` | `@Roles(STOCK)` |
 | `exam` GET/POST | `@AllowCommonUser` / admin | `@Roles(EXAMS, EXAM_TEMPLATES)` |
 | `exam` PUT/DELETE | `@AllowCommonUser` / admin | `@Roles(EXAM_TEMPLATES)` |
-| `exam-template` * | `@AllowCommonUser` / admin | `@Roles(EXAM_TEMPLATES)` |
+| `exam-template` GET `/` e `/:id` | `@AllowCommonUser` | `@Roles(EXAM_TEMPLATES, EXAMS)` ³ |
+| `exam-template` GET `/all`, POST/PUT/DELETE | `@AllowCommonUser` / admin | `@Roles(EXAM_TEMPLATES)` |
 | `anamnesis` * | admin | `@Roles(ANAMNESIS)` |
 | `patient` GET | `@AllowCommonUser` | `@Roles(PATIENTS, EXAMS, EXAM_TEMPLATES, ANAMNESIS)` ¹ |
 | `patient` POST/PUT/DELETE | admin | `@Roles(PATIENTS)` |
@@ -237,6 +238,10 @@ hoje admin-only que passam a ser delegáveis:
 ¹ Quem lança/edita exame ou faz anamnese precisa listar pacientes para escolher
 um — sempre na versão anonimizada, exceto quem tem `PATIENTS`.
 ² Logo e rodapé do laudo: qualquer usuário logado precisa para imprimir.
+³ Quem só lança exame precisa **ler** os modelos ativos (e o schema de campos de
+um deles) para ter o que escolher no cadastro — sem isso o papel `EXAMS` não
+cadastra nada. A escrita e a listagem completa (`/all`, que inclui versões
+desativadas) seguem exclusivas de `EXAM_TEMPLATES`.
 
 **Mudança de comportamento a confirmar:** hoje qualquer autenticado *vê* o
 estoque; depois, só quem tem o papel `STOCK`. É o que você pediu, mas é uma
