@@ -136,8 +136,10 @@ export class StockService {
     }
 
     const after = await this.repo.findOneByOrFail({ id });
+    // ADJUST, e não UPDATE: no histórico, movimentar estoque não pode se
+    // parecer com uma edição do cadastro do item.
     await this.audit.record({
-      action: AuditAction.UPDATE,
+      action: AuditAction.ADJUST,
       entity: AuditEntity.STOCK_ITEM,
       entityId: id,
       userId,
