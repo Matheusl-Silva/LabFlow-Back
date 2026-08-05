@@ -11,9 +11,15 @@ Este documento cobre os dois repositórios (LabFlow-Back e LabFlow-Front).
 > sentido depois que o sistema estiver rodando com papéis em produção.
 >
 > Decisões tomadas na implementação:
-> - Papéis: `ADMIN`, `EXAMS`, `STOCK`, `PATIENTS`.
-> - Dado pessoal de paciente: liberado ao papel **PATIENTS** (quem só tem
->   `EXAMS` continua recebendo a versão anonimizada).
+> - Papéis: `ADMIN`, `EXAMS`, `EXAM_TEMPLATES`, `ANAMNESIS`, `STOCK`,
+>   `PATIENTS`.
+> - **Exames quebrados em dois papéis** (pedido no review do PR #10): `EXAMS`
+>   apenas lança e consulta exames; `EXAM_TEMPLATES` edita/exclui exames já
+>   lançados e faz o CRUD dos modelos. Assim existe um perfil que cadastra sem
+>   poder editar os exames nem os modelos.
+> - **Anamnese ganhou papel próprio** (`ANAMNESIS`), separada de `EXAMS`.
+> - Dado pessoal de paciente: liberado ao papel **PATIENTS** (quem não tem
+>   `PATIENTS` continua recebendo a versão anonimizada).
 > - Papel `STOCK`: CRUD completo do estoque, não só consulta e movimentação.
 
 ---
@@ -80,7 +86,9 @@ exige código de guard e tela de qualquer forma.
 | Papel | Dá acesso a |
 |---|---|
 | `ADMIN` | Tudo. Superusuário: passa em qualquer checagem de papel. |
-| `EXAMS` | Exames, modelos de exame, anamneses |
+| `EXAMS` | Lançar e consultar exames de paciente (sem editar/excluir, sem modelos) |
+| `EXAM_TEMPLATES` | Editar/excluir exames já lançados + CRUD dos modelos de exame |
+| `ANAMNESIS` | Anamneses (CRUD) |
 | `STOCK` | Estoque (CRUD completo dos itens) |
 | `PATIENTS` | Cadastro de pacientes |
 
@@ -94,6 +102,14 @@ edita usuários se promove a admin).
 Dentro de um módulo, quem tem o papel faz tudo. **Não** criar `stock.read` /
 `stock.write`. Permissão fina multiplica os casos de teste por 2 a cada verbo e
 não corresponde a nenhuma necessidade concreta hoje.
+
+> **Exceção nos exames** (review do PR #10): aqui a necessidade concreta
+> apareceu — o laboratório quer um operador que *lance* exames sem poder
+> *editar* o que já foi registrado nem mexer nos modelos. Por isso o módulo de
+> exames tem dois papéis: `EXAMS` (create + read) e `EXAM_TEMPLATES`
+> (edit/delete de exames + CRUD de modelos). É a única quebra da regra
+> "papel = módulo inteiro", e existe porque há um caso de uso real por trás
+> dela, não por simetria.
 
 Duas exceções que continuam amarradas ao `ADMIN`, independentemente de papel:
 
@@ -209,15 +225,17 @@ hoje admin-only que passam a ser delegáveis:
 | `stock` GET | `@AllowCommonUser` | `@Roles(STOCK)` |
 | `stock` POST/PUT/DELETE | admin | `@Roles(STOCK)` |
 | `stock` PATCH quantity | `@AllowCommonUser` | `@Roles(STOCK)` |
-| `exam` * | `@AllowCommonUser` / admin | `@Roles(EXAMS)` |
-| `exam-template` * | `@AllowCommonUser` / admin | `@Roles(EXAMS)` |
-| `anamnesis` * | admin | `@Roles(EXAMS)` |
-| `patient` GET | `@AllowCommonUser` | `@Roles(PATIENTS, EXAMS)` ¹ |
+| `exam` GET/POST | `@AllowCommonUser` / admin | `@Roles(EXAMS, EXAM_TEMPLATES)` |
+| `exam` PUT/DELETE | `@AllowCommonUser` / admin | `@Roles(EXAM_TEMPLATES)` |
+| `exam-template` * | `@AllowCommonUser` / admin | `@Roles(EXAM_TEMPLATES)` |
+| `anamnesis` * | admin | `@Roles(ANAMNESIS)` |
+| `patient` GET | `@AllowCommonUser` | `@Roles(PATIENTS, EXAMS, EXAM_TEMPLATES, ANAMNESIS)` ¹ |
 | `patient` POST/PUT/DELETE | admin | `@Roles(PATIENTS)` |
 | `user`, `audit-log`, `settings` PUT | admin | inalterado (admin) |
 | `settings` GET | `@AllowCommonUser` | `@Authenticated()` ² |
 
-¹ Quem lança exame precisa listar pacientes para escolher um.
+¹ Quem lança/edita exame ou faz anamnese precisa listar pacientes para escolher
+um — sempre na versão anonimizada, exceto quem tem `PATIENTS`.
 ² Logo e rodapé do laudo: qualquer usuário logado precisa para imprimir.
 
 **Mudança de comportamento a confirmar:** hoje qualquer autenticado *vê* o
@@ -313,8 +331,10 @@ comportamento visível só chega no PR 2, quando é possível conceder e revogar
 
 Antes de começar, três respostas suas:
 
-1. **Lista final de papéis** — `EXAMS`, `STOCK`, `PATIENTS` cobrem o
-   laboratório, ou anamnese/modelos merecem papel próprio?
+1. ~~**Lista final de papéis** — `EXAMS`, `STOCK`, `PATIENTS` cobrem o
+   laboratório, ou anamnese/modelos merecem papel próprio?~~ **Resolvido no
+   review do PR #10:** anamnese e modelos merecem papel próprio. Papéis finais:
+   `ADMIN`, `EXAMS`, `EXAM_TEMPLATES`, `ANAMNESIS`, `STOCK`, `PATIENTS`.
 2. **Dado pessoal de paciente** — continua restrito ao `ADMIN`, ou o papel
    `PATIENTS` passa a ver o cadastro completo?
 3. **Estoque** — quem tem o papel `STOCK` pode cadastrar e excluir itens, ou

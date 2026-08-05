@@ -12,8 +12,21 @@
 export enum Role {
   /** Superusuário: passa em qualquer checagem de papel. */
   ADMIN = 'ADMIN',
-  /** Exames, modelos de exame e anamneses. */
+  /**
+   * Lançamento de exames: cadastra e consulta os exames dos pacientes.
+   * NÃO edita nem exclui exames, e não toca nos modelos — isso é do
+   * papel EXAM_TEMPLATES. É o operador do dia a dia.
+   */
   EXAMS = 'EXAMS',
+  /**
+   * Gestão de exames e modelos: edita/exclui exames já lançados e faz o
+   * CRUD completo dos modelos de exame. Papel de configuração, acima do
+   * EXAMS — separado para que quem só lança não altere o que já foi feito
+   * nem a estrutura dos modelos.
+   */
+  EXAM_TEMPLATES = 'EXAM_TEMPLATES',
+  /** Anamneses: cadastra, consulta, edita e exclui. */
+  ANAMNESIS = 'ANAMNESIS',
   /** Estoque de insumos: CRUD completo e movimentação. */
   STOCK = 'STOCK',
   /** Cadastro de pacientes, incluindo os dados pessoais. */
@@ -24,6 +37,8 @@ export enum Role {
 export const ASSIGNABLE_ROLES: Role[] = [
   Role.ADMIN,
   Role.EXAMS,
+  Role.EXAM_TEMPLATES,
+  Role.ANAMNESIS,
   Role.STOCK,
   Role.PATIENTS,
 ];

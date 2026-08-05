@@ -25,15 +25,16 @@ import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Pacientes')
 // Cadastrar/editar/excluir paciente é do papel PATIENTS. As leituras abrem
-// também para EXAMS (ver os @Roles nos handlers): quem lança exame precisa
-// escolher um paciente na lista — mas recebe a versão anonimizada.
+// também para os papéis que trabalham sobre um paciente (ver os @Roles nos
+// handlers): quem lança/edita exame ou faz anamnese precisa escolher um
+// paciente na lista — mas recebe a versão anonimizada.
 @Roles(Role.PATIENTS)
 @Controller('patient')
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
   @PatientSwagger.findPatients()
-  @Roles(Role.PATIENTS, Role.EXAMS)
+  @Roles(Role.PATIENTS, Role.EXAMS, Role.EXAM_TEMPLATES, Role.ANAMNESIS)
   @Get()
   async get(@UserFromJwt() user: JwtPayload): Promise<Patient[]> {
     if(hasRole(user, Role.PATIENTS)) return this.patientService.get();
@@ -41,7 +42,7 @@ export class PatientController {
   }
 
   @PatientSwagger.findPatientById()
-  @Roles(Role.PATIENTS, Role.EXAMS)
+  @Roles(Role.PATIENTS, Role.EXAMS, Role.EXAM_TEMPLATES, Role.ANAMNESIS)
   @Get(':id')
   async getById(
     @Param('id', ParseIntPipe) id: number,

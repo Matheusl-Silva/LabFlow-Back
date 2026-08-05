@@ -8,8 +8,9 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import type { JwtPayload } from '../common/types/jwt.payload.type';
 
-// Anamnese é parte do fluxo de exame: mesmo papel.
-@Roles(Role.EXAMS)
+// Anamnese tem papel próprio: quem lança exames não necessariamente cuida
+// das anamneses, e vice-versa.
+@Roles(Role.ANAMNESIS)
 @Controller('anamnesis')
 export class AnamnesisController {
   constructor(private readonly anamnesisService: AnamnesisService) {}

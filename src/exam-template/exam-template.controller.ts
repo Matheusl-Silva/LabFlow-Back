@@ -21,7 +21,9 @@ import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
 import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Templates de Exame')
-@Roles(Role.EXAMS)
+// Modelos de exame são configuração: só o papel EXAM_TEMPLATES mexe neles.
+// Quem tem apenas EXAMS lança exames, mas não altera a estrutura dos modelos.
+@Roles(Role.EXAM_TEMPLATES)
 @Controller('/template')
 export class ExamTemplateController {
   constructor(private readonly service: ExamTemplateService) {}

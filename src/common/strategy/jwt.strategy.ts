@@ -24,7 +24,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt'){
             ? payload.roles
             : payload.isAdmin
               ? [Role.ADMIN]
-              : [Role.EXAMS, Role.PATIENTS];
+              : [Role.EXAMS, Role.EXAM_TEMPLATES, Role.ANAMNESIS, Role.PATIENTS];
 
         return {
             id: payload.sub,

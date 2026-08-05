@@ -8,8 +8,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * mesmas permissões de antes — só que agora expressas em papéis:
  *
  *   is_admin = true  → ADMIN
- *   is_admin = false → EXAMS + PATIENTS (o que o "usuário comum" já fazia:
- *                      lançar exames e consultar a lista de pacientes)
+ *   is_admin = false → EXAMS + EXAM_TEMPLATES + ANAMNESIS + PATIENTS
+ *                      (tudo o que o "usuário comum" já fazia: lançar e editar
+ *                      exames, mexer nos modelos, anamneses e consultar a lista
+ *                      de pacientes — agora quebrado nos papéis por módulo)
  */
 export class AddUserRoles1784165700000 implements MigrationInterface {
   name = 'AddUserRoles1784165700000';
@@ -41,6 +43,18 @@ export class AddUserRoles1784165700000 implements MigrationInterface {
     await queryRunner.query(`
       INSERT INTO "user_roles" ("user_id", "role")
       SELECT "id", 'EXAMS' FROM "users" WHERE "is_admin" = false
+      ON CONFLICT DO NOTHING
+    `);
+
+    await queryRunner.query(`
+      INSERT INTO "user_roles" ("user_id", "role")
+      SELECT "id", 'EXAM_TEMPLATES' FROM "users" WHERE "is_admin" = false
+      ON CONFLICT DO NOTHING
+    `);
+
+    await queryRunner.query(`
+      INSERT INTO "user_roles" ("user_id", "role")
+      SELECT "id", 'ANAMNESIS' FROM "users" WHERE "is_admin" = false
       ON CONFLICT DO NOTHING
     `);
 
