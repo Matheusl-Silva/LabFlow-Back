@@ -1,19 +1,25 @@
-import { IsBoolean, IsOptional } from 'class-validator';
+import { ArrayUnique, IsArray, IsEnum, IsOptional } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { SignUpDto } from '../../auth/dto/signup.dto';
+import { Role } from '../../common/enums/role.enum';
 
 /**
  * Criação de usuário por um administrador. Diferente do auto-cadastro
- * (`/auth/signup`), o usuário nasce ativo e o admin pode defini-lo como
- * administrador direto na criação.
+ * (`/auth/signup`), o usuário nasce ativo e o admin já define os papéis.
  */
 export class CreateUserDto extends SignUpDto {
   @ApiPropertyOptional({
-    description: 'Define se o novo usuário é administrador',
-    example: false,
-    default: false,
+    description:
+      'Papéis de acesso. Vazio = conta ativa sem acesso a nenhum módulo, útil para aprovar antes de decidir o que a pessoa acessa.',
+    enum: Role,
+    enumName: 'Role',
+    isArray: true,
+    example: [Role.EXAMS, Role.PATIENTS],
+    default: [],
   })
   @IsOptional()
-  @IsBoolean()
-  isAdmin?: boolean = false;
+  @IsArray()
+  @ArrayUnique()
+  @IsEnum(Role, { each: true })
+  roles?: Role[] = [];
 }

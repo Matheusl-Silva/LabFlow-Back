@@ -11,10 +11,11 @@ import { ExamModule } from './exam/exam.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { JwtGuard } from './common/guards/jwt.guard';
-import { AdminGuard } from './common/guards/admin.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 import { AnamnesisModule } from './anamnesis/anamnesis.module';
 import { AuditModule } from './audit/audit.module';
 import { SettingsModule } from './settings/settings.module';
+import { StockModule } from './stock/stock.module';
 
 @Module({
   imports: [
@@ -37,7 +38,8 @@ import { SettingsModule } from './settings/settings.module';
     AuthModule,
     AnamnesisModule,
     AuditModule,
-    SettingsModule],
+    SettingsModule,
+    StockModule],
   controllers: [AppController],
   providers: [
     AppService,
@@ -45,7 +47,7 @@ import { SettingsModule } from './settings/settings.module';
     // gastar CPU validando JWT.
     {provide: APP_GUARD, useClass: ThrottlerGuard},
     {provide: APP_GUARD, useClass: JwtGuard},
-    {provide: APP_GUARD, useClass: AdminGuard}
+    {provide: APP_GUARD, useClass: RolesGuard}
   ],
 })
 export class AppModule {}

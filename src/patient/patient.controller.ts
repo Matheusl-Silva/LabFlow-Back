@@ -17,34 +17,42 @@ import { CreatePatientDto } from './dto/create-patient.dto';
 import { QueryFailedError } from 'typeorm';
 import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
 import { User } from '../entities/user.entity';
-import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
+import { hasRole } from '../common/utils/has-role';
 import { PatientSwagger } from './patient.swagger';
 import type { JwtPayload } from '../common/types/jwt.payload.type';
 
 @ApiTags('Pacientes')
+// Cadastrar/editar/excluir paciente é do papel PATIENTS. As leituras abrem
+// também para os papéis que trabalham sobre um paciente (ver os @Roles nos
+// handlers): quem lança/edita exame ou faz anamnese precisa escolher um
+// paciente na lista — mas recebe a versão anonimizada.
+@Roles(Role.PATIENTS)
 @Controller('patient')
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
   @PatientSwagger.findPatients()
-  @AllowCommonUser()
+  @Roles(Role.PATIENTS, Role.EXAMS, Role.EXAM_TEMPLATES, Role.ANAMNESIS)
   @Get()
   async get(@UserFromJwt() user: JwtPayload): Promise<Patient[]> {
-    if(user.isAdmin) return this.patientService.get();
+    if(hasRole(user, Role.PATIENTS)) return this.patientService.get();
     return this.patientService.getPrivate();
   }
 
   @PatientSwagger.findPatientById()
-  @AllowCommonUser()
+  @Roles(Role.PATIENTS, Role.EXAMS, Role.EXAM_TEMPLATES, Role.ANAMNESIS)
   @Get(':id')
   async getById(
     @Param('id', ParseIntPipe) id: number,
     @UserFromJwt() user: JwtPayload,
   ): Promise<Patient | null> {
     try {
-      // Usuário comum precisa do paciente para registrar exames, mas não pode
-      // ver os dados pessoais dele.
-      if (user.isAdmin) return await this.patientService.getById(id);
+      // Quem só tem EXAMS precisa do paciente para registrar o exame, mas não
+      // pode ver os dados pessoais dele (LGPD). O dado completo é do papel
+      // PATIENTS, que é quem cadastra e revisa o paciente.
+      if (hasRole(user, Role.PATIENTS)) return await this.patientService.getById(id);
       return await this.patientService.getPrivateById(id);
     } catch (err) {
       console.error(err);

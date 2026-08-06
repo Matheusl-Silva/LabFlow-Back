@@ -4,8 +4,13 @@ import { CreateAnamnesisDto } from './dto/create-anamnesis.dto';
 import { UpdateAnamnesisDto } from './dto/update-anamnesis.dto';
 import { Anamnesis } from '../entities/anamnesis.entity';
 import { UserFromJwt } from '../common/decorators/user-jwt.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
 import type { JwtPayload } from '../common/types/jwt.payload.type';
 
+// Anamnese tem papel próprio: quem lança exames não necessariamente cuida
+// das anamneses, e vice-versa.
+@Roles(Role.ANAMNESIS)
 @Controller('anamnesis')
 export class AnamnesisController {
   constructor(private readonly anamnesisService: AnamnesisService) {}

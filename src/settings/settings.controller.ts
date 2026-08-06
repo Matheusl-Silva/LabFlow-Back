@@ -4,7 +4,7 @@ import { SettingsService, SettingsView } from './settings.service';
 import { UpdateLogoDto } from './dto/update-logo.dto';
 import { UpdateFooterDto } from './dto/update-footer.dto';
 import { SettingsSwagger } from './settings.swagger';
-import { AllowCommonUser } from '../common/decorators/allow-common-user.decorator';
+import { Authenticated } from '../common/decorators/authenticated.decorator';
 
 @ApiTags('Configurações')
 @Controller('/settings')
@@ -13,7 +13,7 @@ export class SettingsController {
 
   // Qualquer usuário autenticado precisa ler a logo/rodapé para gerar o laudo.
   @SettingsSwagger.getSettings()
-  @AllowCommonUser()
+  @Authenticated()
   @Get()
   async getSettings(): Promise<SettingsView> {
     return this.service.getSettings();

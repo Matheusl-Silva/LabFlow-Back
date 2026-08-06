@@ -3,6 +3,7 @@ import { ExtractJwt, Strategy } from "passport-jwt";
 import { ConfigService } from "@nestjs/config";
 import { Injectable } from "@nestjs/common";
 import { JwtPayload } from "../types/jwt.payload.type";
+import { Role } from "../enums/role.enum";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt'){
@@ -14,9 +15,21 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt'){
     }
 
     async validate(payload): Promise<JwtPayload>{
+        // Compatibilidade com tokens emitidos ANTES dos papéis existirem: eles
+        // só trazem `isAdmin`. Sem este fallback, quem estivesse logado no
+        // momento do deploy levaria 403 até o token expirar (15 min). O
+        // fallback do usuário comum reproduz o que ele já podia fazer.
+        // Pode sair quando a Fase 6 remover `isAdmin` do payload.
+        const roles: Role[] = Array.isArray(payload.roles)
+            ? payload.roles
+            : payload.isAdmin
+              ? [Role.ADMIN]
+              : [Role.EXAMS, Role.EXAM_TEMPLATES, Role.ANAMNESIS, Role.PATIENTS];
+
         return {
             id: payload.sub,
-            isAdmin: payload.isAdmin
+            isAdmin: roles.includes(Role.ADMIN),
+            roles
         }
     }
 }

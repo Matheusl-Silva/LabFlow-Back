@@ -7,10 +7,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hash, verify } from 'argon2';
+import { UserRole } from '../entities/user-role.entity';
+import { Role } from '../common/enums/role.enum';
 
 @Injectable()
 export class AuthService {
     constructor(@InjectRepository(User) private readonly userRepo: Repository<User>,
+                @InjectRepository(UserRole) private readonly userRoleRepo: Repository<UserRole>,
                 private jwt: JwtService,
                 private config: ConfigService){}
 
@@ -29,7 +32,11 @@ export class AuthService {
       throw new ForbiddenException('Conta pendente de aprovação de um administrador');
     }
 
-    return { token: await this.signToken(user.id, user.isAdmin) };
+    // Os papéis não vêm no findOneBy acima (relação lazy por padrão), então
+    // buscamos aqui: são eles que o token carrega.
+    const roles = await this.rolesOf(user.id);
+
+    return { token: await this.signToken(user.id, roles) };
   }
 
   async signup(dto: SignUpDto): Promise<{ message: string }> {
@@ -46,7 +53,16 @@ export class AuthService {
       isAdmin: isFirstUser,
       isActive: isFirstUser,
     });
-    await this.userRepo.save(newUser);
+    const saved = await this.userRepo.save(newUser);
+
+    // O primeiro usuário precisa do papel ADMIN, ou o sistema nasce sem
+    // ninguém capaz de conceder papéis. Quem se auto-cadastra depois nasce sem
+    // papel nenhum: quem define o que ele acessa é o admin que o aprovar.
+    if (isFirstUser) {
+      await this.userRoleRepo.save(
+        this.userRoleRepo.create({ userId: saved.id, role: Role.ADMIN }),
+      );
+    }
 
     return {
       message: isFirstUser
@@ -55,10 +71,19 @@ export class AuthService {
     };
   }
 
-  private async signToken(id: number, isAdmin: boolean): Promise<string> {
+  /** Papéis concedidos ao usuário, na forma que o token carrega. */
+  private async rolesOf(userId: number): Promise<Role[]> {
+    const rows = await this.userRoleRepo.findBy({ userId });
+    return rows.map((row) => row.role);
+  }
+
+  private async signToken(id: number, roles: Role[]): Promise<string> {
     const payload = {
       sub: id,
-      isAdmin,
+      // Derivado, não fonte da verdade: o guard decide por `roles`. Mantido no
+      // payload porque os controllers ainda recortam a resposta por perfil.
+      isAdmin: roles.includes(Role.ADMIN),
+      roles,
     };
     return this.jwt.sign(payload, {
       expiresIn: '15m',

@@ -12,8 +12,9 @@ import {
 export const SwaggerPublic = () => applyDecorators()
 
 /**
- * Rota de usuário comum autenticado — espelha o decorator @AllowCommonUser() do guard.
- * Exige token JWT válido. Exibe cadeado "access-token" no Swagger UI.
+ * Rota de usuário autenticado — espelha os decorators @Authenticated() e
+ * @Roles() do guard. Exige token JWT válido. Exibe cadeado "access-token" no
+ * Swagger UI.
  */
 export const SwaggerAuthUser = () =>
   applyDecorators(
