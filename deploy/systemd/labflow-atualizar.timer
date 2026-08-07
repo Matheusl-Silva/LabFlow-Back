@@ -1,0 +1,12 @@
+[Unit]
+Description=Janela diaria de atualizacao do LabFlow (03:00 horario de Brasilia)
+
+[Timer]
+# O fuso vai explicito no OnCalendar porque o servidor roda em UTC. O cron do
+# Debian ignora CRON_TZ (tratado como env var, nao como fuso do agendamento),
+# entao o timer do systemd e o caminho correto aqui.
+OnCalendar=*-*-* 03:00:00 America/Sao_Paulo
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

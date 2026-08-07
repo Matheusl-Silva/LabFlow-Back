@@ -1,0 +1,12 @@
+[Unit]
+Description=Atualiza o LabFlow para a ultima release publicada
+# O script fala com o Docker e com a API do GitHub; sem isto pode rodar antes
+# de o daemon ou a rede estarem prontos num boot.
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/labflow/atualizar.sh
+StandardOutput=append:/var/log/labflow-deploy.log
+StandardError=append:/var/log/labflow-deploy.log

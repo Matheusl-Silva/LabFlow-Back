@@ -21,7 +21,9 @@ BACKUPS_MANTIDOS=7
 REPO_FRONT='Matheusl-Silva/LabFlow-Front'
 REPO_BACK='Matheusl-Silva/LabFlow-Back'
 
-dc() { docker compose -f "$COMPOSE" "$@"; }
+# --env-file explícito: o Compose já leria o .env por estar no mesmo diretório,
+# mas deixar declarado evita surpresa se o script for chamado de outro lugar.
+dc() { docker compose -f "$COMPOSE" --env-file "$ENV_FILE" "$@"; }
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 erro() { log "ERRO: $*" >&2; }
 

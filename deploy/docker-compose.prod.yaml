@@ -1,67 +1,86 @@
-# Compose de PRODUÇÃO.
+# Stack de produção do LabFlow.
 #
-# Diferente do docker-compose.yaml da raiz — que compila o código-fonte e exige
-# os dois repos clonados no servidor — aqui as imagens já vêm prontas do Docker
-# Hub, publicadas pelo CI a cada release. O servidor só baixa e sobe.
+# Diferença central para o docker-compose.yaml da raiz (que é de
+# desenvolvimento): aqui NADA é construído. As imagens vêm prontas do Docker
+# Hub, publicadas pelo CI de cada repositório. Atualizar produção é `pull` +
+# `up -d`, nunca `build`.
 #
-# As versões ficam no .env ao lado deste arquivo e são escritas pelo
-# atualizar.sh. O Compose lê esse .env automaticamente por estar no mesmo
-# diretório do compose file.
+# As versões vêm do .env e são escritas pelo atualizar.sh a cada deploy. Fixar
+# a versão (em vez de seguir `latest`) é o que torna o rollback possível: dá
+# para nomear exatamente a que voltar.
+#
+# Uso na VPS:
+#   cd /opt/labflow
+#   docker compose -f docker-compose.prod.yaml --env-file .env up -d
 
-# O nome do projeto precisa bater com o da stack que já roda no servidor, senão
-# o Compose cria uma stack NOVA — com um volume de Postgres vazio — e o banco
-# atual fica órfão. Confira com `docker compose ls` antes do primeiro uso e
-# ajuste aqui se o seu for diferente.
-name: labflow-back
+name: labflow
 
 services:
-  front:
-    image: matheus05/labflow-front:${VERSAO_FRONT:?defina VERSAO_FRONT no .env}
-    ports:
-      # Só a porta do host é configurável — dentro do container o Next sempre
-      # escuta na 3001. Útil para subir uma stack de teste em paralelo.
-      - '${PORTA_FRONT:-3001}:3001'
-    depends_on:
-      back:
-        condition: service_healthy
-    restart: always
+  db:
+    # Versão fixa de propósito. `postgres:latest` faz o major mudar sozinho num
+    # `pull` qualquer, e major novo não lê o datadir do anterior — o container
+    # sobe em loop de erro. Trocar de major é migração planejada, não efeito
+    # colateral de deploy.
+    image: postgres:16-alpine
+    restart: unless-stopped
+
+    # `-c timezone`: fuso PADRÃO DO SERVIDOR, herdado por toda sessão, inclusive
+    # a do node-postgres (que ignora PGTZ/TZ). É o que faz now()/CURRENT_TIMESTAMP
+    # (created_at/updated_at) gravarem no horário de Brasília em vez de UTC.
+    command: ['postgres', '-c', 'timezone=America/Sao_Paulo']
+
     environment:
-      # O server.js do Next standalone escuta em process.env.HOSTNAME — e o
-      # Docker preenche essa variável com o ID do container. Sem isto ele binda
-      # só no IP da rede do container, e o loopback (onde o healthcheck sonda)
-      # recusa conexão.
-      HOSTNAME: 0.0.0.0
+      POSTGRES_USER: ${MAIN_DB_USER}
+      POSTGRES_PASSWORD: ${MAIN_DB_PASSWORD}
+      POSTGRES_DB: ${MAIN_DB}
+      TZ: America/Sao_Paulo
+
+    # Sem `ports`. O banco é alcançável só pela rede interna do compose — em
+    # produção não existe motivo para 5432 aparecer na interface pública.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
-      # wget vem do busybox na imagem alpine, não precisa instalar nada.
-      # /login é público e não depende de sessão.
-      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3001/login']
-      interval: 10s
+      test: ['CMD-SHELL', 'pg_isready -U ${MAIN_DB_USER} -d ${MAIN_DB}']
+      interval: 5s
       timeout: 5s
-      retries: 6
-      start_period: 40s
+      retries: 10
+      start_period: 10s
 
   back:
     image: matheus05/labflow-back:${VERSAO_BACK:?defina VERSAO_BACK no .env}
-    ports:
-      - '${PORTA_BACK:-3000}:3000'
+    restart: unless-stopped
+
+    # O entrypoint roda as migrations antes de subir a API; se o banco ainda não
+    # aceita conexão, a migration falha e o container reinicia em loop. Esperar
+    # o healthcheck evita isso.
     depends_on:
       db:
         condition: service_healthy
+
     environment:
       MAIN_DB_URL: 'postgresql://${MAIN_DB_USER}:${MAIN_DB_PASSWORD}@db:5432/${MAIN_DB}'
-      PORT: ${PORT}
+      PORT: 3000
       JWT_SECRET: ${JWT_SECRET}
+      # Origem liberada no CORS. Hoje front e API dividem o mesmo host, então o
+      # navegador nem dispara preflight — mas a variável precisa estar certa
+      # para o dia em que a API ganhar subdomínio próprio.
       FRONT_URL: ${FRONT_URL}
-      # Fuso do processo Node: node-postgres usa este TZ para converter as
-      # colunas `timestamp without time zone` (grava/lê no horário de Brasília).
+      NODE_ENV: production
       TZ: America/Sao_Paulo
-    restart: always
+
+    # Só no loopback: quem publica na internet é o Apache do host, com TLS.
+    # Publicar em 0.0.0.0 também fura o UFW, porque o Docker escreve direto no
+    # iptables e passa por cima das regras dele.
+    ports:
+      - '127.0.0.1:3000:3000'
+
     healthcheck:
-      # Não existe rota GET pública: o JwtGuard é global e as únicas rotas
-      # @Public() são POST (signup/signin, ainda por cima com rate limit de
-      # 5/min). Então a sonda checa que o servidor RESPONDE HTTP, não que
-      # autentica — um 401 já prova que o Nest subiu e está roteando. O grep
-      # em "HTTP/" falha se nada estiver escutando, que é o caso que importa.
+      # Não existe rota GET pública para sondar: o JwtGuard é global e as únicas
+      # rotas @Public() são POST (signup/signin, com rate limit de 5/min). Então
+      # a sonda verifica que o servidor RESPONDE HTTP — um 401 já prova que o
+      # Nest subiu e está roteando. O grep em "HTTP/" só falha quando não há
+      # ninguém escutando, que é o caso que precisa ser detectado.
       test:
         [
           'CMD-SHELL',
@@ -70,36 +89,40 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      # Generoso de propósito: o start:prod roda as migrations pendentes antes
-      # de a API começar a responder.
+      # Generoso de propósito: as migrations rodam antes de a API responder.
       start_period: 60s
 
-  db:
-    # ATENÇÃO: tag flutuante. Um `docker compose pull db` pode trazer um major
-    # novo do Postgres e o data directory existente fica incompatível — por isso
-    # o atualizar.sh puxa só `front` e `back`. Vale fixar no major que você já
-    # roda (`docker compose exec db postgres --version`), ex.: postgres:16.
-    image: postgres
+  front:
+    image: matheus05/labflow-front:${VERSAO_FRONT:?defina VERSAO_FRONT no .env}
     restart: unless-stopped
-    # `-c timezone`: define o fuso PADRÃO DO SERVIDOR, herdado por TODA sessão —
-    # inclusive a do node-postgres (que ignora PGTZ/TZ). É o que faz
-    # `now()`/CURRENT_TIMESTAMP (created_at/updated_at) gravarem no horário de
-    # Brasília em vez de UTC.
-    command: ['postgres', '-c', 'timezone=America/Sao_Paulo']
+
+    # `service_healthy` em vez de só `depends_on`: é o que faz um deploy ruim
+    # falhar de imediato em vez de deixar o front no ar contra uma API morta.
+    depends_on:
+      back:
+        condition: service_healthy
+
     environment:
-      POSTGRES_USER: ${MAIN_DB_USER}
-      POSTGRES_PASSWORD: ${MAIN_DB_PASSWORD}
-      POSTGRES_DB: ${MAIN_DB}
+      PORT: 3001
+      NODE_ENV: production
       TZ: America/Sao_Paulo
+      # O server.js do Next standalone escuta em process.env.HOSTNAME, e o
+      # Docker preenche essa variável com o ID do container. Sem isto ele binda
+      # apenas no IP da rede do container e recusa conexão no loopback — onde o
+      # healthcheck sonda.
+      HOSTNAME: 0.0.0.0
+
     ports:
-      - '${MAIN_DB_PORT}:5432'
-    volumes:
-      - postgres_data:/var/lib/postgresql
+      - '127.0.0.1:3001:3001'
+
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${MAIN_DB_USER} -d ${MAIN_DB}']
-      interval: 5s
+      # 127.0.0.1 explícito: `localhost` resolve para ::1 primeiro e o Next não
+      # escuta em IPv6.
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3001/login']
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 6
+      start_period: 40s
 
 volumes:
   postgres_data:
