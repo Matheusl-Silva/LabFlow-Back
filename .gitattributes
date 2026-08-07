@@ -1,0 +1,3 @@
+# Scripts executados no servidor Linux precisam de LF. Com core.autocrlf=true no
+# Windows, um .sh commitado com CRLF quebra o shebang lá ("bad interpreter").
+*.sh text eol=lf

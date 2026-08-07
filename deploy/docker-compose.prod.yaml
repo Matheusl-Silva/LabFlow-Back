@@ -1,0 +1,105 @@
+# Compose de PRODUÇÃO.
+#
+# Diferente do docker-compose.yaml da raiz — que compila o código-fonte e exige
+# os dois repos clonados no servidor — aqui as imagens já vêm prontas do Docker
+# Hub, publicadas pelo CI a cada release. O servidor só baixa e sobe.
+#
+# As versões ficam no .env ao lado deste arquivo e são escritas pelo
+# atualizar.sh. O Compose lê esse .env automaticamente por estar no mesmo
+# diretório do compose file.
+
+# O nome do projeto precisa bater com o da stack que já roda no servidor, senão
+# o Compose cria uma stack NOVA — com um volume de Postgres vazio — e o banco
+# atual fica órfão. Confira com `docker compose ls` antes do primeiro uso e
+# ajuste aqui se o seu for diferente.
+name: labflow-back
+
+services:
+  front:
+    image: matheus05/labflow-front:${VERSAO_FRONT:?defina VERSAO_FRONT no .env}
+    ports:
+      # Só a porta do host é configurável — dentro do container o Next sempre
+      # escuta na 3001. Útil para subir uma stack de teste em paralelo.
+      - '${PORTA_FRONT:-3001}:3001'
+    depends_on:
+      back:
+        condition: service_healthy
+    restart: always
+    environment:
+      # O server.js do Next standalone escuta em process.env.HOSTNAME — e o
+      # Docker preenche essa variável com o ID do container. Sem isto ele binda
+      # só no IP da rede do container, e o loopback (onde o healthcheck sonda)
+      # recusa conexão.
+      HOSTNAME: 0.0.0.0
+    healthcheck:
+      # wget vem do busybox na imagem alpine, não precisa instalar nada.
+      # /login é público e não depende de sessão.
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3001/login']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+  back:
+    image: matheus05/labflow-back:${VERSAO_BACK:?defina VERSAO_BACK no .env}
+    ports:
+      - '${PORTA_BACK:-3000}:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MAIN_DB_URL: 'postgresql://${MAIN_DB_USER}:${MAIN_DB_PASSWORD}@db:5432/${MAIN_DB}'
+      PORT: ${PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONT_URL: ${FRONT_URL}
+      # Fuso do processo Node: node-postgres usa este TZ para converter as
+      # colunas `timestamp without time zone` (grava/lê no horário de Brasília).
+      TZ: America/Sao_Paulo
+    restart: always
+    healthcheck:
+      # Não existe rota GET pública: o JwtGuard é global e as únicas rotas
+      # @Public() são POST (signup/signin, ainda por cima com rate limit de
+      # 5/min). Então a sonda checa que o servidor RESPONDE HTTP, não que
+      # autentica — um 401 já prova que o Nest subiu e está roteando. O grep
+      # em "HTTP/" falha se nada estiver escutando, que é o caso que importa.
+      test:
+        [
+          'CMD-SHELL',
+          'wget -S --spider -T 5 http://localhost:3000/ 2>&1 | grep -q "HTTP/"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      # Generoso de propósito: o start:prod roda as migrations pendentes antes
+      # de a API começar a responder.
+      start_period: 60s
+
+  db:
+    # ATENÇÃO: tag flutuante. Um `docker compose pull db` pode trazer um major
+    # novo do Postgres e o data directory existente fica incompatível — por isso
+    # o atualizar.sh puxa só `front` e `back`. Vale fixar no major que você já
+    # roda (`docker compose exec db postgres --version`), ex.: postgres:16.
+    image: postgres
+    restart: unless-stopped
+    # `-c timezone`: define o fuso PADRÃO DO SERVIDOR, herdado por TODA sessão —
+    # inclusive a do node-postgres (que ignora PGTZ/TZ). É o que faz
+    # `now()`/CURRENT_TIMESTAMP (created_at/updated_at) gravarem no horário de
+    # Brasília em vez de UTC.
+    command: ['postgres', '-c', 'timezone=America/Sao_Paulo']
+    environment:
+      POSTGRES_USER: ${MAIN_DB_USER}
+      POSTGRES_PASSWORD: ${MAIN_DB_PASSWORD}
+      POSTGRES_DB: ${MAIN_DB}
+      TZ: America/Sao_Paulo
+    ports:
+      - '${MAIN_DB_PORT}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${MAIN_DB_USER} -d ${MAIN_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
