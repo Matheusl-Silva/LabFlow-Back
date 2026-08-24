@@ -23,7 +23,9 @@ export type RefreshRevokeReason =
   /** O usuário saiu. */
   | 'LOGOUT'
   /** Conta desativada ou removida por um administrador. */
-  | 'ACCOUNT_DISABLED';
+  | 'ACCOUNT_DISABLED'
+  /** Senha redefinida: toda sessão aberta cai junto. */
+  | 'PASSWORD_RESET';
 
 /**
  * Sessão de longa duração de um usuário.

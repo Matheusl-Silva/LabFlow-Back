@@ -15,6 +15,8 @@ import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { SignInDto } from './dto/signin.dto';
 import { SignUpDto } from './dto/signup.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthService } from './auth.service';
 import { Public } from '../common/decorators/is-public.decorator';
 import { AuthSwagger } from './auth.swagger';
@@ -108,6 +110,40 @@ export class AuthController {
       }
       throw err;
     }
+  }
+
+  @AuthSwagger.forgotPassword()
+  // Mais rígido que o login: cada requisição aqui dispara um e-mail para um
+  // endereço que quem chama escolheu. Sem um teto baixo, a rota vira ferramenta
+  // de spam contra terceiros — e o custo do envio é nosso.
+  @Throttle({ default: { ttl: 900_000, limit: 5 } })
+  // 202, não 200: a resposta sai antes de saber se o e-mail chegou, e é a mesma
+  // para conta existente ou não.
+  @HttpCode(202)
+  @Post('forgot-password')
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<{ message: string }> {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @AuthSwagger.resetPassword()
+  // Folgado perto do pedido: quem tem o link legítimo pode errar a nova senha
+  // algumas vezes nas regras de complexidade. Adivinhar um token de 32 bytes
+  // não é o que este limite impede.
+  @Throttle({ default: { ttl: 900_000, limit: 20 } })
+  @HttpCode(200)
+  @Post('reset-password')
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ message: string }> {
+    const result = await this.authService.resetPassword(dto.token, dto.pass);
+    // As sessões já caíram no servidor. O cookie deste navegador precisa ir
+    // junto: mantê-lo faria o front tentar renovar com um refresh revogado e
+    // tomar 401 na primeira navegação depois da troca.
+    clearRefreshCookie(res, this.config);
+    return result;
   }
 
   @AuthSwagger.logout()

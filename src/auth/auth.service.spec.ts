@@ -1,8 +1,13 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { FindOperator } from 'typeorm';
 import { hash } from 'argon2';
 import { AuthService } from './auth.service';
 import { RefreshToken } from '../entities/refresh-token.entity';
+import { PasswordResetToken } from '../entities/password-reset-token.entity';
 import { User } from '../entities/user.entity';
 import { Role } from '../common/enums/role.enum';
 
@@ -34,18 +39,21 @@ function bate(linha: Record<string, unknown>, where: Record<string, unknown>) {
 
 /**
  * Repositório em memória. O `update` condicional é a peça que importa: ele
- * reproduz o "só um UPDATE encontra a linha com revoked_at NULL" que torna o
- * consumo do token atômico no Postgres.
+ * reproduz o "só um UPDATE encontra a linha ainda NULL" que torna atômico tanto
+ * o consumo do refresh (revoked_at) quanto o do token de redefinição (used_at).
  */
-class FakeRefreshRepo {
-  linhas: RefreshToken[] = [];
+class FakeRepo<T extends { id: number }> {
+  linhas: T[] = [];
   private proximoId = 1;
 
-  create(dados: Partial<RefreshToken>): RefreshToken {
-    return { revokedAt: null, revokedReason: null, ...dados } as RefreshToken;
+  /** Colunas que o Postgres deixaria NULL e o teste precisa enxergar assim. */
+  constructor(private readonly padroes: Partial<T> = {}) {}
+
+  create(dados: Partial<T>): T {
+    return { ...this.padroes, ...dados } as T;
   }
 
-  save(linha: RefreshToken): Promise<RefreshToken> {
+  save(linha: T): Promise<T> {
     if (!linha.id) {
       linha.id = this.proximoId++;
       this.linhas.push(linha);
@@ -53,7 +61,7 @@ class FakeRefreshRepo {
     return Promise.resolve(linha);
   }
 
-  findOneBy(where: Record<string, unknown>): Promise<RefreshToken | null> {
+  findOneBy(where: Record<string, unknown>): Promise<T | null> {
     return Promise.resolve(
       this.linhas.find((l) => bate(l as never, where)) ?? null,
     );
@@ -61,7 +69,7 @@ class FakeRefreshRepo {
 
   update(
     where: Record<string, unknown>,
-    patch: Partial<RefreshToken>,
+    patch: Partial<T>,
   ): Promise<{ affected: number }> {
     const alvos = this.linhas.filter((l) => bate(l as never, where));
     alvos.forEach((l) => Object.assign(l, patch));
@@ -75,15 +83,31 @@ class FakeRefreshRepo {
   }
 }
 
+/** E-mail que o MailService teria mandado. */
+interface EnvioCapturado {
+  to: string;
+  link: string;
+  minutes: number;
+  tokenId: number;
+}
+
 describe('AuthService — sessão', () => {
   let service: AuthService;
-  let refreshRepo: FakeRefreshRepo;
+  let refreshRepo: FakeRepo<RefreshToken>;
+  let resetRepo: FakeRepo<PasswordResetToken>;
+  let enviados: EnvioCapturado[];
   let usuario: User;
   let papeis: Role[];
   let env: Record<string, string>;
+  let passwordHash: string;
 
   const criar = () => {
-    refreshRepo = new FakeRefreshRepo();
+    refreshRepo = new FakeRepo<RefreshToken>({
+      revokedAt: null,
+      revokedReason: null,
+    });
+    resetRepo = new FakeRepo<PasswordResetToken>({ usedAt: null });
+    enviados = [];
 
     const userRepo = {
       findOneBy: (where: { id?: number; email?: string }) => {
@@ -93,6 +117,25 @@ describe('AuthService — sessão', () => {
             : usuario.email === where.email;
         return Promise.resolve(achou ? usuario : null);
       },
+      // A redefinição grava a senha e revoga as sessões numa transação só. O
+      // fake roteia cada update para o alvo certo pela entidade recebida — é o
+      // que permite ao teste conferir que as DUAS coisas aconteceram.
+      manager: {
+        transaction: (cb: (m: unknown) => Promise<void>) =>
+          cb({
+            update: (
+              entidade: unknown,
+              where: Record<string, unknown>,
+              patch: Record<string, unknown>,
+            ) => {
+              if (entidade === User) {
+                Object.assign(usuario, patch);
+                return Promise.resolve({ affected: 1 });
+              }
+              return refreshRepo.update(where, patch as never);
+            },
+          }),
+      },
     };
 
     const userRoleRepo = {
@@ -100,25 +143,39 @@ describe('AuthService — sessão', () => {
         Promise.resolve(papeis.map((role) => ({ userId: usuario.id, role }))),
     };
 
+    const mail = {
+      sendPasswordReset: (params: EnvioCapturado) => {
+        enviados.push(params);
+        return Promise.resolve(true);
+      },
+    };
+
     service = new AuthService(
       userRepo as never,
       userRoleRepo as never,
       refreshRepo as never,
+      resetRepo as never,
       // Token "assinado" como JSON: deixa o teste inspecionar os papéis que
       // foram parar dentro dele.
       { sign: (payload: unknown) => JSON.stringify(payload) } as never,
+      mail as never,
       { get: (chave: string) => env[chave] } as never,
     );
   };
+
+  /** Token que viajou no link do e-mail — é o que o usuário devolve à API. */
+  const tokenDoLink = (envio: EnvioCapturado): string =>
+    decodeURIComponent(new URL(envio.link).searchParams.get('token') ?? '');
 
   const papeisDoToken = (token: string): Role[] =>
     (JSON.parse(token) as { roles: Role[] }).roles;
 
   beforeAll(async () => {
     // argon2 é caro de propósito; um hash só serve para todos os testes.
-    const passwordHash = await hash(SENHA);
+    passwordHash = await hash(SENHA);
     usuario = {
       id: 1,
+      name: 'Admin de Teste',
       email: 'admin@labflow.test',
       passwordHash,
       isActive: true,
@@ -129,6 +186,8 @@ describe('AuthService — sessão', () => {
     papeis = [Role.EXAMS];
     env = {};
     usuario.isActive = true;
+    // Restaurado a cada teste: a redefinição de senha escreve no mesmo objeto.
+    usuario.passwordHash = passwordHash;
     criar();
   });
 
@@ -305,6 +364,123 @@ describe('AuthService — sessão', () => {
     it('recusa token desconhecido', async () => {
       await expect(service.refresh('nunca-existiu')).rejects.toBeInstanceOf(
         UnauthorizedException,
+      );
+    });
+  });
+
+  describe('redefinição de senha', () => {
+    const NOVA = 'NovaSenha123';
+
+    it('manda o link e guarda apenas o hash do token', async () => {
+      await service.forgotPassword(usuario.email);
+
+      expect(enviados).toHaveLength(1);
+      expect(enviados[0].to).toBe(usuario.email);
+      expect(resetRepo.linhas).toHaveLength(1);
+
+      const emClaro = tokenDoLink(enviados[0]);
+      // O token em claro não pode existir em lugar nenhum da linha gravada.
+      expect(JSON.stringify(resetRepo.linhas[0])).not.toContain(emClaro);
+      expect(resetRepo.linhas[0].tokenHash).toHaveLength(64);
+    });
+
+    it('responde igual para e-mail sem cadastro, sem enviar nada', async () => {
+      const conhecido = await service.forgotPassword(usuario.email);
+      const desconhecido = await service.forgotPassword('ninguem@labflow.test');
+
+      // Resposta idêntica: a rota não pode virar um verificador de cadastro.
+      expect(desconhecido.message).toBe(conhecido.message);
+      expect(enviados).toHaveLength(1);
+    });
+
+    it('não manda link para conta pendente de aprovação', async () => {
+      // Redefinir a senha não libera o acesso dela — quem libera é o admin.
+      usuario.isActive = false;
+
+      await service.forgotPassword(usuario.email);
+
+      expect(enviados).toHaveLength(0);
+      expect(resetRepo.linhas).toHaveLength(0);
+    });
+
+    it('invalida o link anterior a cada novo pedido', async () => {
+      await service.forgotPassword(usuario.email);
+      const primeiro = tokenDoLink(enviados[0]);
+      await service.forgotPassword(usuario.email);
+
+      // Só o último link vale: o primeiro sai do banco junto com o novo pedido.
+      expect(resetRepo.linhas).toHaveLength(1);
+      await expect(
+        service.resetPassword(primeiro, NOVA),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('troca a senha e derruba todas as sessões abertas', async () => {
+      const sessao = await service.signin({
+        email: usuario.email,
+        pass: SENHA,
+      });
+      await service.forgotPassword(usuario.email);
+
+      await service.resetPassword(tokenDoLink(enviados[0]), NOVA);
+
+      // A senha antiga morre e a nova entra.
+      await expect(
+        service.signin({ email: usuario.email, pass: SENHA }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(
+        service.signin({ email: usuario.email, pass: NOVA }),
+      ).resolves.toBeTruthy();
+
+      // E a sessão que já estava aberta não renova mais: é o ponto do fluxo —
+      // quem redefine a senha normalmente está expulsando um invasor.
+      await expect(service.refresh(sessao.refreshToken)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(
+        resetRepo.linhas[0].usedAt !== null &&
+          refreshRepo.linhas.some((l) => l.revokedReason === 'PASSWORD_RESET'),
+      ).toBe(true);
+    });
+
+    it('recusa o mesmo link uma segunda vez', async () => {
+      await service.forgotPassword(usuario.email);
+      const token = tokenDoLink(enviados[0]);
+      await service.resetPassword(token, NOVA);
+
+      // Uso único: o link no histórico do e-mail não pode virar chave permanente.
+      await expect(
+        service.resetPassword(token, 'OutraSenha123'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('recusa link vencido sem consumi-lo como usado', async () => {
+      await service.forgotPassword(usuario.email);
+      resetRepo.linhas[0].expiresAt = new Date(Date.now() - 1_000);
+
+      await expect(
+        service.resetPassword(tokenDoLink(enviados[0]), NOVA),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      // Vencido não é o mesmo que usado.
+      expect(resetRepo.linhas[0].usedAt).toBeNull();
+    });
+
+    it('recusa token desconhecido', async () => {
+      await expect(
+        service.resetPassword('nunca-existiu', NOVA),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('monta o link com a PRIMEIRA origem quando FRONT_URL é uma lista', async () => {
+      // Regressão: FRONT_URL é a mesma variável do CORS e aceita lista separada
+      // por vírgula — usar a string inteira geraria um link quebrado.
+      env = { FRONT_URL: 'https://lab.exemplo.br/, https://outro.exemplo.br' };
+      criar();
+
+      await service.forgotPassword(usuario.email);
+
+      expect(enviados[0].link).toMatch(
+        /^https:\/\/lab\.exemplo\.br\/recover\?token=/,
       );
     });
   });

@@ -25,6 +25,11 @@ services:
       PORT: ${PORT}
       JWT_SECRET: ${JWT_SECRET}
       FRONT_URL: ${FRONT_URL}
+      # Redefinição de senha por e-mail. Sem RESEND_API_KEY o envio fica
+      # desligado e o fluxo de "esqueci minha senha" não entrega nada.
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      MAIL_FROM: ${MAIL_FROM}
+      PASSWORD_RESET_MINUTES: ${PASSWORD_RESET_MINUTES}
       # Fuso do processo Node: node-postgres usa este TZ para converter as
       # colunas `timestamp without time zone` (grava/lê no horário de Brasília).
       TZ: America/Sao_Paulo

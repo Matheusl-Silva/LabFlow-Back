@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -12,6 +13,8 @@ import {
   RefreshToken,
   RefreshRevokeReason,
 } from '../entities/refresh-token.entity';
+import { PasswordResetToken } from '../entities/password-reset-token.entity';
+import { MailService } from '../mail/mail.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
@@ -29,12 +32,26 @@ export interface IssuedSession {
   refreshExpiresAt: Date;
 }
 
+/**
+ * Resposta única do pedido de redefinição — a mesma para e-mail cadastrado e
+ * não cadastrado. Extraída para constante justamente para que ninguém
+ * personalize um dos caminhos sem perceber que está vazando a existência da
+ * conta.
+ */
+const FORGOT_PASSWORD_MESSAGE =
+  'Se houver uma conta ativa com este e-mail, um link de redefinição foi enviado.';
+
+/** Idem para a segunda etapa: nunca dizer QUAL das condições reprovou. */
+const RESET_INVALID_MESSAGE = 'Link de redefinição inválido ou expirado.';
+
 @Injectable()
 export class AuthService {
     constructor(@InjectRepository(User) private readonly userRepo: Repository<User>,
                 @InjectRepository(UserRole) private readonly userRoleRepo: Repository<UserRole>,
                 @InjectRepository(RefreshToken) private readonly refreshRepo: Repository<RefreshToken>,
+                @InjectRepository(PasswordResetToken) private readonly resetRepo: Repository<PasswordResetToken>,
                 private jwt: JwtService,
+                private mail: MailService,
                 private config: ConfigService){}
 
   private readonly logger = new Logger(AuthService.name);
@@ -125,10 +142,17 @@ export class AuthService {
         // Derrubar a sessão de alguém em silêncio deixa o suporte sem nada para
         // investigar: este aviso é o único rastro de que houve indício de
         // credencial copiada.
+        // Só 'ROTATED' fora da janela é sintoma de cookie copiado. Reapresentar
+        // um token derrubado por logout, desativação ou redefinição de senha é
+        // o comportamento NORMAL das outras abas do próprio dono — chamar isso
+        // de roubo no log treinaria quem lê a ignorar o aviso que importa.
+        const anterior = atual?.revokedReason ?? 'desconhecida';
         this.logger.warn(
           `Refresh token reapresentado após revogação (usuário ${stored.userId}, ` +
-            `sessão ${stored.familyId}, revogação anterior: ${atual?.revokedReason ?? 'desconhecida'}). ` +
-            'Cadeia inteira derrubada — possível cookie copiado.',
+            `sessão ${stored.familyId}, revogação anterior: ${anterior}). ` +
+            (anterior === 'ROTATED'
+              ? 'Cadeia inteira derrubada — possível cookie copiado.'
+              : 'Cadeia inteira derrubada — esperado após o encerramento da sessão.'),
         );
         throw new UnauthorizedException('Sessão inválida');
       }
@@ -193,6 +217,120 @@ export class AuthService {
       message: isFirstUser
         ? 'Conta de administrador criada com sucesso. Você já pode entrar.'
         : 'Cadastro recebido. Aguarde a aprovação de um administrador para acessar.',
+    };
+  }
+
+  /**
+   * Primeira etapa da redefinição: cria um token de uso único e manda o link
+   * por e-mail.
+   *
+   * A resposta é SEMPRE a mesma, exista ou não a conta. Devolver "e-mail não
+   * encontrado" transformaria esta rota em um verificador de cadastro — quem
+   * quisesse saber quais endereços têm conta no laboratório bastaria consultar
+   * aqui. É a mesma razão do "Wrong credentials" uniforme no signin.
+   *
+   * Falha de envio também não vaza para a resposta: o MailService loga e
+   * devolve false, e o usuário vê a mensagem genérica de qualquer forma.
+   */
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const user = await this.userRepo.findOneBy({ email });
+
+    // Conta inativa não recebe link: redefinir a senha não libera o acesso —
+    // quem libera é a aprovação de um administrador. Mandar o e-mail aqui só
+    // faria o usuário achar que resolveu.
+    if (!user || !user.isActive) {
+      this.logger.log(
+        'Pedido de redefinição para e-mail sem conta ativa; nenhum e-mail enviado.',
+      );
+      return { message: FORGOT_PASSWORD_MESSAGE };
+    }
+
+    // Um pedido novo invalida os anteriores: se a pessoa clicou três vezes em
+    // "esqueci minha senha", só o último link funciona. Sem isso, cada pedido
+    // deixaria mais uma chave válida circulando na caixa de entrada.
+    await this.resetRepo.delete({ userId: user.id });
+
+    const raw = randomBytes(32).toString('base64url');
+    const minutes = this.resetTtlMinutes();
+    const saved = await this.resetRepo.save(
+      this.resetRepo.create({
+        userId: user.id,
+        tokenHash: this.hashToken(raw),
+        expiresAt: new Date(Date.now() + minutes * 60 * 1000),
+      }),
+    );
+
+    await this.mail.sendPasswordReset({
+      to: user.email,
+      name: user.name,
+      link: `${this.frontBaseUrl()}/recover?token=${encodeURIComponent(raw)}`,
+      minutes,
+      tokenId: saved.id,
+    });
+
+    return { message: FORGOT_PASSWORD_MESSAGE };
+  }
+
+  /**
+   * Segunda etapa: troca a senha e derruba TODAS as sessões abertas do usuário.
+   *
+   * A derrubada não é zelo excessivo — o motivo mais comum de redefinir senha é
+   * suspeita de conta comprometida, e deixar de pé os refresh tokens de sete
+   * dias deixaria o invasor logado depois da troca.
+   */
+  async resetPassword(
+    rawToken: string,
+    novaSenha: string,
+  ): Promise<{ message: string }> {
+    const stored = await this.resetRepo.findOneBy({
+      tokenHash: this.hashToken(rawToken),
+    });
+
+    // Motivo único para token inexistente, vencido, já usado ou de conta
+    // inativa: distinguir os casos contaria ao visitante se aquele link um dia
+    // existiu.
+    if (!stored) throw new BadRequestException(RESET_INVALID_MESSAGE);
+    if (stored.usedAt) throw new BadRequestException(RESET_INVALID_MESSAGE);
+    if (stored.expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException(RESET_INVALID_MESSAGE);
+    }
+
+    // CONSUMO ATÔMICO, pelo mesmo motivo do refresh: entre o SELECT acima e a
+    // troca de senha há uma janela em que dois envios com o mesmo link
+    // passariam os dois. Só um UPDATE encontra a linha com used_at ainda NULL.
+    const consumo = await this.resetRepo.update(
+      { id: stored.id, usedAt: IsNull() },
+      { usedAt: new Date() },
+    );
+    if (consumo.affected === 0)
+      throw new BadRequestException(RESET_INVALID_MESSAGE);
+
+    const user = await this.userRepo.findOneBy({ id: stored.userId });
+    // Desativado ou removido entre o pedido e o clique: o link não ressuscita
+    // a conta. O token já foi consumido acima, então ele também não sobra.
+    if (!user || !user.isActive)
+      throw new BadRequestException(RESET_INVALID_MESSAGE);
+
+    const passwordHash = await hash(novaSenha);
+
+    // Em transação: a troca de senha e a queda das sessões precisam valer
+    // juntas. Se a senha mudasse e a revogação falhasse, o usuário sairia da
+    // operação achando que expulsou o invasor — com a sessão dele ainda de pé.
+    await this.userRepo.manager.transaction(async (manager) => {
+      await manager.update(User, { id: user.id }, { passwordHash });
+      await manager.update(
+        RefreshToken,
+        { userId: user.id, revokedAt: IsNull() },
+        { revokedAt: new Date(), revokedReason: 'PASSWORD_RESET' },
+      );
+    });
+
+    this.logger.log(
+      `Senha redefinida via link de e-mail (usuário ${user.id}); sessões abertas revogadas.`,
+    );
+
+    return {
+      message: 'Senha redefinida com sucesso. Entre com a nova senha.',
     };
   }
 
@@ -310,6 +448,27 @@ export class AuthService {
 
   private refreshTtlMs(): number {
     return this.configNumber('REFRESH_TOKEN_DAYS', 7) * 24 * 60 * 60 * 1000;
+  }
+
+  /** Validade do link de redefinição, em minutos. */
+  private resetTtlMinutes(): number {
+    return this.configNumber('PASSWORD_RESET_MINUTES', 30);
+  }
+
+  /**
+   * Base do link enviado por e-mail.
+   *
+   * FRONT_URL é a MESMA variável do CORS e aceita lista separada por vírgula —
+   * daí o split: montar o link com a string inteira geraria uma URL quebrada
+   * em toda instalação que libera mais de uma origem. A primeira entrada é a
+   * origem canônica por convenção.
+   */
+  private frontBaseUrl(): string {
+    const primeira = this.configText('FRONT_URL', 'http://localhost:3001')
+      .split(',')[0]
+      .trim();
+    // Sem a barra final: ela seria duplicada ao concatenar com '/recover'.
+    return primeira.replace(/\/+$/, '');
   }
 
   /**
