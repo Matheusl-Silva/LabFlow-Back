@@ -1,23 +1,57 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { SignUpDto } from './dto/signup.dto';
 import { SignInDto } from './dto/signin.dto.js';
-import { Repository } from 'typeorm';
+import { IsNull, LessThan, Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
+import {
+  RefreshToken,
+  RefreshRevokeReason,
+} from '../entities/refresh-token.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { hash, verify } from 'argon2';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import { UserRole } from '../entities/user-role.entity';
 import { Role } from '../common/enums/role.enum';
+import type { UserView } from '../user/user.service';
+
+/** Par de tokens entregue no login e em cada renovação. */
+export interface IssuedSession {
+  /** JWT curto. Vai para o cookie httpOnly `labflow_access`. */
+  token: string;
+  /**
+   * Instante em que o JWT acima expira. Acompanha o cookie para o navegador
+   * não guardar credencial já morta.
+   */
+  accessExpiresAt: Date;
+  /** Token opaco de longa duração — vai para o cookie httpOnly. */
+  refreshToken: string;
+  refreshExpiresAt: Date;
+}
 
 @Injectable()
 export class AuthService {
     constructor(@InjectRepository(User) private readonly userRepo: Repository<User>,
                 @InjectRepository(UserRole) private readonly userRoleRepo: Repository<UserRole>,
+                @InjectRepository(RefreshToken) private readonly refreshRepo: Repository<RefreshToken>,
                 private jwt: JwtService,
                 private config: ConfigService){}
 
-  async signin(dto: SignInDto): Promise<{ token: string }> {
+  private readonly logger = new Logger(AuthService.name);
+
+  /**
+   * Devolve o usuário junto com a sessão. Antes o front decodificava o JWT
+   * para achar o `sub` e só então buscava o perfil em GET /user/:id — com o
+   * token em cookie httpOnly ele não tem mais como ler o payload, e essa volta
+   * deixou de existir (uma requisição a menos em todo login).
+   */
+  async signin(dto: SignInDto): Promise<IssuedSession & { user: UserView }> {
     const user = await this.userRepo.findOneBy({ email: dto.email });
     // Mensagem uniforme para credencial inválida: não revela se o e-mail existe.
     if (!user) throw new UnauthorizedException('Wrong credentials');
@@ -36,7 +70,115 @@ export class AuthService {
     // buscamos aqui: são eles que o token carrega.
     const roles = await this.rolesOf(user.id);
 
-    return { token: await this.signToken(user.id, roles) };
+    const refresh = await this.issueRefreshToken(user.id);
+    const access = this.signToken(user.id, roles);
+    return {
+      token: access.token,
+      accessExpiresAt: access.expiresAt,
+      refreshToken: refresh.raw,
+      refreshExpiresAt: refresh.expiresAt,
+      user: this.toUserView(user, roles),
+    };
+  }
+
+  /**
+   * Troca um refresh token válido por um access token novo — e por um refresh
+   * novo (rotação): o token apresentado morre no processo.
+   *
+   * Os papéis são relidos do BANCO aqui, não copiados do token anterior. É o
+   * que faz uma concessão ou revogação de papel valer em no máximo 15 minutos,
+   * em vez de esperar o usuário relogar.
+   */
+  async refresh(rawToken: string): Promise<IssuedSession> {
+    const stored = await this.refreshRepo.findOneBy({
+      tokenHash: this.hashToken(rawToken),
+    });
+    // Token desconhecido: ou nunca existiu, ou a faxina já o removeu.
+    if (!stored) throw new UnauthorizedException('Sessão inválida');
+
+    // Antes do consumo: a validade não muda enquanto a requisição roda, então
+    // checar aqui evita marcar como "rotacionado" um token que já estava morto
+    // — e mantém o motivo da revogação contando a verdade.
+    if (stored.expiresAt.getTime() <= Date.now()) {
+      throw new UnauthorizedException('Sessão expirada');
+    }
+
+    // CONSUMO ATÔMICO. Ler a linha e só depois gravar deixaria uma janela entre
+    // o SELECT e o UPDATE em que duas requisições com o MESMO token passariam
+    // as duas — e a detecção de reuso, que é a razão de o refresh ser rotativo,
+    // nunca dispararia. Aqui quem fica com o token é decidido pelo banco: só um
+    // UPDATE encontra a linha ainda com revoked_at NULL.
+    const consumo = await this.refreshRepo.update(
+      { id: stored.id, revokedAt: IsNull() },
+      { revokedAt: new Date(), revokedReason: 'ROTATED' },
+    );
+
+    if (consumo.affected === 0) {
+      // Alguém consumiu antes. Reler é obrigatório: o `stored` acima pode ter
+      // sido lido justamente na corrida e não sabe por que a linha caiu.
+      const atual = await this.refreshRepo.findOneBy({ id: stored.id });
+
+      // Corrida entre abas: duas abas tomaram 401 ao mesmo tempo e renovaram
+      // com o mesmo cookie. Derrubar a sessão aqui seria punir o uso normal do
+      // sistema, então o token vale por mais alguns segundos.
+      //
+      // A checagem do MOTIVO é o que impede a tolerância de virar um furo: um
+      // token revogado por roubo ou por logout não ganha carona nenhuma. Sem
+      // isso, derrubar a família em resposta a um roubo daria ao atacante uma
+      // janela para renovar — e o token emitido nessa janela nasceria válido,
+      // anulando a revogação inteira.
+      const corridaEntreAbas =
+        atual?.revokedReason === 'ROTATED' &&
+        !!atual.revokedAt &&
+        this.withinReuseGrace(atual.revokedAt);
+
+      if (!corridaEntreAbas) {
+        // Um token já consumido voltando fora dessa janela é o sintoma clássico
+        // de cookie copiado: o ladrão e o dono usam a mesma cadeia. Não há como
+        // saber qual é qual, então a família cai e os dois refazem o login.
+        await this.revokeFamily(stored.familyId, 'REUSED');
+        // Derrubar a sessão de alguém em silêncio deixa o suporte sem nada para
+        // investigar: este aviso é o único rastro de que houve indício de
+        // credencial copiada.
+        this.logger.warn(
+          `Refresh token reapresentado após revogação (usuário ${stored.userId}, ` +
+            `sessão ${stored.familyId}, revogação anterior: ${atual?.revokedReason ?? 'desconhecida'}). ` +
+            'Cadeia inteira derrubada — possível cookie copiado.',
+        );
+        throw new UnauthorizedException('Sessão inválida');
+      }
+    }
+
+    const user = await this.userRepo.findOneBy({ id: stored.userId });
+    // Conta apagada ou desativada por um admin: a sessão morre junto, sem
+    // esperar os dias de validade do refresh.
+    if (!user || !user.isActive) {
+      await this.revokeFamily(stored.familyId, 'ACCOUNT_DISABLED');
+      throw new UnauthorizedException('Sessão inválida');
+    }
+
+    const roles = await this.rolesOf(user.id);
+    const next = await this.issueRefreshToken(user.id, stored.familyId);
+    const access = this.signToken(user.id, roles);
+
+    return {
+      token: access.token,
+      accessExpiresAt: access.expiresAt,
+      refreshToken: next.raw,
+      refreshExpiresAt: next.expiresAt,
+    };
+  }
+
+  /**
+   * Logout de verdade: derruba a família inteira, não só o token apresentado.
+   * Silencioso de propósito — sair da sessão nunca deve devolver erro ao
+   * usuário, mesmo com um cookie velho ou já inválido na mão.
+   */
+  async logout(rawToken: string): Promise<void> {
+    const stored = await this.refreshRepo.findOneBy({
+      tokenHash: this.hashToken(rawToken),
+    });
+    if (stored) await this.revokeFamily(stored.familyId, 'LOGOUT');
   }
 
   async signup(dto: SignUpDto): Promise<{ message: string }> {
@@ -77,7 +219,21 @@ export class AuthService {
     return rows.map((row) => row.role);
   }
 
-  private async signToken(id: number, roles: Role[]): Promise<string> {
+  /** O usuário na forma que a API expõe — mesmo recorte de GET /user/:id. */
+  private toUserView(user: User, roles: Role[]): UserView {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      isAdmin: roles.includes(Role.ADMIN),
+      isActive: user.isActive,
+      roles,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
+  private signToken(id: number, roles: Role[]): { token: string; expiresAt: Date } {
     const payload = {
       sub: id,
       // Derivado, não fonte da verdade: o guard decide por `roles`. Mantido no
@@ -85,9 +241,153 @@ export class AuthService {
       isAdmin: roles.includes(Role.ADMIN),
       roles,
     };
-    return this.jwt.sign(payload, {
-      expiresIn: '15m',
-      secret: this.config.get('JWT_SECRET'),
-    });
+    // Curto por desenho: é ele que carrega os papéis, e um papel revogado só
+    // deixa de valer quando o token que o carrega expira. Quem sustenta a
+    // sessão do usuário é o refresh, não a validade deste token.
+    //
+    // O cast existe porque o jsonwebtoken tipa `expiresIn` como template
+    // literal (`15m`, `7d`…), e uma env var é string qualquer.
+    const expiresIn = this.configText(
+      'JWT_EXPIRES_IN',
+      '15m',
+    ) as JwtSignOptions['expiresIn'];
+
+    return {
+      token: this.jwt.sign(payload, {
+        expiresIn,
+        secret: this.config.get('JWT_SECRET'),
+      }),
+      // Calculado a partir da MESMA env que o jsonwebtoken usa, em vez de
+      // decodificar o token de volta: o valor serve só para o `expires` do
+      // cookie, e quem decide de fato se o token vale continua sendo a
+      // verificação da assinatura.
+      expiresAt: new Date(Date.now() + this.accessTtlMs(String(expiresIn))),
+    };
+  }
+
+  /**
+   * Converte a notação do jsonwebtoken ('15m', '10s', '7d', ou segundos puros)
+   * em milissegundos. Só o cookie depende disto — um valor irreconhecível cai
+   * nos 15 minutos padrão em vez de derrubar o login.
+   */
+  private accessTtlMs(expiresIn: string): number {
+    const PADRAO_MS = 15 * 60 * 1000;
+    const UNIDADES: Record<string, number> = {
+      s: 1_000,
+      m: 60_000,
+      h: 3_600_000,
+      d: 86_400_000,
+    };
+
+    const match = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?$/i.exec(expiresIn.trim());
+    if (!match) {
+      this.logger.warn(
+        `JWT_EXPIRES_IN="${expiresIn}" não é uma duração reconhecida; ` +
+          'o cookie de acesso usará 15m.',
+      );
+      return PADRAO_MS;
+    }
+
+    const [, valor, unidade] = match;
+    if (unidade?.toLowerCase() === 'ms') return Number(valor);
+    // Sem unidade, o jsonwebtoken interpreta o número como SEGUNDOS.
+    return Number(valor) * (UNIDADES[unidade?.toLowerCase() ?? 's'] ?? 1_000);
+  }
+
+  /**
+   * Cria a próxima sessão. Sem `familyId` é um login novo (família nova); com
+   * ele, é mais um elo da cadeia iniciada naquele login.
+   */
+  private async issueRefreshToken(
+    userId: number,
+    familyId?: string,
+  ): Promise<{ raw: string; expiresAt: Date }> {
+    // Faxina em toda emissão, e não só no login: quem fica logado renova a cada
+    // 15 minutos e pode passar meses sem passar pelo signin — purgar só ali
+    // deixaria a tabela crescer para sempre. Como toda linha vence em
+    // REFRESH_TOKEN_DAYS, limpar aqui mantém o total por usuário limitado à
+    // janela de validade.
+    await this.purgeExpiredTokens(userId);
+
+    // 32 bytes de CSPRNG: espaço de busca grande o bastante para tornar
+    // adivinhação irrelevante, sem depender do rate limit para isso.
+    const raw = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + this.refreshTtlMs());
+
+    await this.refreshRepo.save(
+      this.refreshRepo.create({
+        userId,
+        tokenHash: this.hashToken(raw),
+        familyId: familyId ?? randomUUID(),
+        expiresAt,
+      }),
+    );
+
+    return { raw, expiresAt };
+  }
+
+  private hashToken(raw: string): string {
+    return createHash('sha256').update(raw).digest('hex');
+  }
+
+  /**
+   * Derruba a cadeia inteira. Só toca no que ainda está vivo: um token já
+   * revogado preserva o motivo original, que é o que a tolerância consulta.
+   */
+  private async revokeFamily(
+    familyId: string,
+    reason: RefreshRevokeReason,
+  ): Promise<void> {
+    await this.refreshRepo.update(
+      { familyId, revokedAt: IsNull() },
+      { revokedAt: new Date(), revokedReason: reason },
+    );
+  }
+
+  /** Remove sessões vencidas do usuário — elas não renovam mais nada. */
+  private async purgeExpiredTokens(userId: number): Promise<void> {
+    await this.refreshRepo.delete({ userId, expiresAt: LessThan(new Date()) });
+  }
+
+  /**
+   * Env var declarada mas VAZIA (`CHAVE=`, o estilo do .env.example) chega como
+   * string vazia — que `??` NÃO intercepta, porque '' não é null nem undefined.
+   * Sem normalizar aqui, `Number('')` viraria 0 e zeraria a validade do refresh
+   * token: todo token nasceria expirado e o sistema voltaria à sessão de 15
+   * minutos que este mecanismo existe para resolver.
+   */
+  private configText(key: string, fallback: string): string {
+    const value = this.config.get<string>(key)?.trim();
+    return value ? value : fallback;
+  }
+
+  /** Como `configText`, recusando também NaN e valores abaixo do mínimo. */
+  private configNumber(key: string, fallback: number, minimo = 1): number {
+    const raw = this.configText(key, String(fallback));
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= minimo) return parsed;
+
+    // Cair no padrão em silêncio esconderia um .env errado até alguém notar
+    // sessões com duração estranha.
+    this.logger.warn(
+      `${key}="${raw}" não é um número válido (mínimo ${minimo}); usando ${fallback}.`,
+    );
+    return fallback;
+  }
+
+  private refreshTtlMs(): number {
+    return this.configNumber('REFRESH_TOKEN_DAYS', 7) * 24 * 60 * 60 * 1000;
+  }
+
+  /**
+   * Janela em que reapresentar um token já rotacionado é tratado como corrida
+   * entre abas, e não como roubo. Curta de propósito: ela é o preço de não
+   * deslogar quem usa o sistema em várias abas ao mesmo tempo.
+   */
+  private withinReuseGrace(revokedAt: Date): boolean {
+    // Mínimo 0: zerar a janela é uma escolha legítima — desliga a tolerância e
+    // trata qualquer reapresentação como roubo.
+    const graceSeconds = this.configNumber('REFRESH_REUSE_GRACE_SECONDS', 30, 0);
+    return Date.now() - revokedAt.getTime() <= graceSeconds * 1000;
   }
 }

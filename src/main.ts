@@ -1,14 +1,30 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Cabeçalhos de segurança (HSTS, X-Content-Type-Options, etc.).
   app.use(helmet());
+
+  // Em produção o Apache do host faz o proxy, então sem isto req.ip seria
+  // 127.0.0.1 para TODO mundo — e o rate limit por IP viraria um balde único
+  // compartilhado pelo laboratório inteiro, justo nas rotas de sessão
+  // (/auth/refresh é chamada por aba a cada expiração do access token).
+  // Um salto: exatamente o Apache. Fora de produção não há proxy à frente, e
+  // confiar em X-Forwarded-For deixaria qualquer cliente forjar o próprio IP.
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
+  // O refresh token chega em cookie httpOnly; sem este parser, req.cookies vem
+  // undefined e /auth/refresh nunca acha a sessão.
+  app.use(cookieParser());
 
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
