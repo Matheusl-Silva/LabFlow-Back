@@ -260,7 +260,12 @@ export class AuthService {
       }),
     );
 
-    await this.mail.sendPasswordReset({
+    // SEM await: a chamada à Resend leva centenas de milissegundos, e esperá-la
+    // faria o caminho da conta existente responder muito mais devagar que o da
+    // conta inexistente — um cronômetro separaria os dois casos e desfaria a
+    // mensagem uniforme acima. Soltar aqui é seguro porque sendPasswordReset
+    // nunca lança: ele já converte qualquer falha em log e `false`.
+    void this.mail.sendPasswordReset({
       to: user.email,
       name: user.name,
       link: `${this.frontBaseUrl()}/recover?token=${encodeURIComponent(raw)}`,

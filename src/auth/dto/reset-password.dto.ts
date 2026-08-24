@@ -15,8 +15,10 @@ export class ResetPasswordDto {
   @IsString()
   @IsNotEmpty()
   // 32 bytes em base64url dão 43 caracteres. O teto existe só para descartar
-  // corpo absurdo antes de gastar um SHA-256 e uma ida ao banco.
-  @MaxLength(128)
+  // corpo absurdo antes de gastar um SHA-256 e uma ida ao banco. A mensagem é
+  // customizada porque ela CHEGA ao usuário: o front mostra os erros de
+  // validação, e o texto padrão do class-validator sairia em inglês.
+  @MaxLength(128, { message: 'Link de redefinição malformado.' })
   token!: string;
 
   @ApiProperty({
