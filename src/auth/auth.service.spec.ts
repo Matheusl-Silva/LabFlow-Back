@@ -232,6 +232,56 @@ describe('AuthService — sessão', () => {
 
       expect(diasAteVencer).toBeGreaterThan(6.9);
     });
+
+    it('devolve o perfil do usuário junto com a sessão', async () => {
+      // O front não decodifica mais o JWT para descobrir quem entrou: com o
+      // token em cookie httpOnly ele não tem acesso ao payload, e este campo é
+      // a única fonte do nome e dos papéis logo após o login.
+      const sessao = await service.signin({
+        email: usuario.email,
+        pass: SENHA,
+      });
+
+      expect(sessao.user.id).toBe(usuario.id);
+      expect(sessao.user.email).toBe(usuario.email);
+      expect(sessao.user.roles).toEqual([Role.EXAMS]);
+      // Nem o hash da senha nem qualquer token podem vazar no perfil.
+      expect(JSON.stringify(sessao.user)).not.toContain(usuario.passwordHash);
+      expect(JSON.stringify(sessao.user)).not.toContain(sessao.refreshToken);
+    });
+
+    it('faz o vencimento do cookie de acesso seguir JWT_EXPIRES_IN', async () => {
+      // O `expires` do cookie httpOnly sai daqui. Se divergisse do `exp` do
+      // token, o navegador guardaria credencial já morta (ou apagaria uma ainda
+      // válida) — em ambos os casos, uma renovação a mais sem motivo.
+      env = { JWT_EXPIRES_IN: '30m' };
+      criar();
+
+      const sessao = await service.signin({
+        email: usuario.email,
+        pass: SENHA,
+      });
+      const minutosAteVencer =
+        (sessao.accessExpiresAt.getTime() - Date.now()) / 60_000;
+
+      expect(minutosAteVencer).toBeGreaterThan(29);
+      expect(minutosAteVencer).toBeLessThanOrEqual(30);
+    });
+
+    it('cai nos 15 minutos padrão quando JWT_EXPIRES_IN é ilegível', async () => {
+      env = { JWT_EXPIRES_IN: 'quinze minutos' };
+      criar();
+
+      const sessao = await service.signin({
+        email: usuario.email,
+        pass: SENHA,
+      });
+      const minutosAteVencer =
+        (sessao.accessExpiresAt.getTime() - Date.now()) / 60_000;
+
+      expect(minutosAteVencer).toBeGreaterThan(14);
+      expect(minutosAteVencer).toBeLessThanOrEqual(15);
+    });
   });
 
   describe('refresh', () => {

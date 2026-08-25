@@ -20,11 +20,14 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthService } from './auth.service';
 import { Public } from '../common/decorators/is-public.decorator';
 import { AuthSwagger } from './auth.swagger';
+import type { UserView } from '../user/user.service';
 import {
   REFRESH_COOKIE_NAME,
+  clearAccessCookie,
   clearRefreshCookie,
+  setAccessCookie,
   setRefreshCookie,
-} from './refresh-cookie';
+} from './auth-cookies';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -56,21 +59,29 @@ export class AuthController {
   @Post('signin')
   async signin(
     @Body() dto: SignInDto,
-    // `passthrough: true`: precisamos do Response só para escrever o cookie —
+    // `passthrough: true`: precisamos do Response só para escrever os cookies —
     // sem ele o Nest deixaria de serializar o retorno do método.
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ token: string }> {
+  ): Promise<{ user: UserView }> {
     try {
       const session = await this.authService.signin(dto);
+      setAccessCookie(
+        res,
+        this.config,
+        session.token,
+        session.accessExpiresAt,
+      );
       setRefreshCookie(
         res,
         this.config,
         session.refreshToken,
         session.refreshExpiresAt,
       );
-      // O refresh NÃO vai no corpo: se fosse, o JavaScript da página poderia
-      // lê-lo, e o cookie httpOnly perderia a razão de existir.
-      return { token: session.token };
+      // NENHUM dos dois tokens vai no corpo: se fossem, o JavaScript da página
+      // poderia lê-los e guardá-los, e os cookies httpOnly perderiam a razão
+      // de existir. O corpo devolve só o perfil, que a interface precisa para
+      // saber o nome e os papéis de quem entrou.
+      return { user: session.user };
     } catch (err) {
       console.error(err);
       throw err;
@@ -82,30 +93,39 @@ export class AuthController {
   // aba a cada 15 min), e adivinhar um token de 32 bytes não é o que o rate
   // limit está impedindo aqui.
   @Throttle({ default: { ttl: 60_000, limit: 60 } })
-  @HttpCode(200)
+  // 204: a renovação inteira acontece nos cookies. Devolver o access token no
+  // corpo o exporia ao JavaScript da página justamente no ponto que este
+  // desenho existe para fechar.
+  @HttpCode(204)
   @Post('refresh')
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ token: string }> {
+  ): Promise<void> {
     const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
     if (!rawToken) throw new UnauthorizedException('Sessão não encontrada');
 
     try {
       const session = await this.authService.refresh(rawToken);
+      setAccessCookie(
+        res,
+        this.config,
+        session.token,
+        session.accessExpiresAt,
+      );
       setRefreshCookie(
         res,
         this.config,
         session.refreshToken,
         session.refreshExpiresAt,
       );
-      return { token: session.token };
     } catch (err) {
-      // Só sessão de fato inválida apaga o cookie: um cookie que não renova
+      // Só sessão de fato inválida apaga os cookies: um cookie que não renova
       // mais só atrapalha. Erro transitório (banco reiniciando, por exemplo)
       // NÃO entra aqui — apagar o refresh nesse caso transformaria uma falha de
       // segundos em logout de todas as sessões abertas.
       if (err instanceof UnauthorizedException) {
+        clearAccessCookie(res, this.config);
         clearRefreshCookie(res, this.config);
       }
       throw err;
@@ -155,8 +175,11 @@ export class AuthController {
   ): Promise<void> {
     const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined;
     if (rawToken) await this.authService.logout(rawToken);
-    // Fora do `if`: sair da sessão sempre limpa o cookie, mesmo que o token já
-    // não exista mais do lado do servidor.
+    // Fora do `if`: sair da sessão sempre limpa os cookies, mesmo que o token
+    // já não exista mais do lado do servidor. O access não é revogável (é um
+    // JWT), então apagá-lo aqui é o que encerra o acesso de imediato — o que
+    // sobra são os 15 min de validade de uma cópia que alguém tivesse feito.
+    clearAccessCookie(res, this.config);
     clearRefreshCookie(res, this.config);
   }
 }

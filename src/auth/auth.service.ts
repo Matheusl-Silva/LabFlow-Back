@@ -22,11 +22,17 @@ import { hash, verify } from 'argon2';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { UserRole } from '../entities/user-role.entity';
 import { Role } from '../common/enums/role.enum';
+import type { UserView } from '../user/user.service';
 
 /** Par de tokens entregue no login e em cada renovação. */
 export interface IssuedSession {
-  /** JWT curto, usado no header Authorization de toda requisição. */
+  /** JWT curto. Vai para o cookie httpOnly `labflow_access`. */
   token: string;
+  /**
+   * Instante em que o JWT acima expira. Acompanha o cookie para o navegador
+   * não guardar credencial já morta.
+   */
+  accessExpiresAt: Date;
   /** Token opaco de longa duração — vai para o cookie httpOnly. */
   refreshToken: string;
   refreshExpiresAt: Date;
@@ -56,7 +62,13 @@ export class AuthService {
 
   private readonly logger = new Logger(AuthService.name);
 
-  async signin(dto: SignInDto): Promise<IssuedSession> {
+  /**
+   * Devolve o usuário junto com a sessão. Antes o front decodificava o JWT
+   * para achar o `sub` e só então buscava o perfil em GET /user/:id — com o
+   * token em cookie httpOnly ele não tem mais como ler o payload, e essa volta
+   * deixou de existir (uma requisição a menos em todo login).
+   */
+  async signin(dto: SignInDto): Promise<IssuedSession & { user: UserView }> {
     const user = await this.userRepo.findOneBy({ email: dto.email });
     // Mensagem uniforme para credencial inválida: não revela se o e-mail existe.
     if (!user) throw new UnauthorizedException('Wrong credentials');
@@ -76,10 +88,13 @@ export class AuthService {
     const roles = await this.rolesOf(user.id);
 
     const refresh = await this.issueRefreshToken(user.id);
+    const access = this.signToken(user.id, roles);
     return {
-      token: await this.signToken(user.id, roles),
+      token: access.token,
+      accessExpiresAt: access.expiresAt,
       refreshToken: refresh.raw,
       refreshExpiresAt: refresh.expiresAt,
+      user: this.toUserView(user, roles),
     };
   }
 
@@ -168,9 +183,11 @@ export class AuthService {
 
     const roles = await this.rolesOf(user.id);
     const next = await this.issueRefreshToken(user.id, stored.familyId);
+    const access = this.signToken(user.id, roles);
 
     return {
-      token: await this.signToken(user.id, roles),
+      token: access.token,
+      accessExpiresAt: access.expiresAt,
       refreshToken: next.raw,
       refreshExpiresAt: next.expiresAt,
     };
@@ -345,7 +362,21 @@ export class AuthService {
     return rows.map((row) => row.role);
   }
 
-  private async signToken(id: number, roles: Role[]): Promise<string> {
+  /** O usuário na forma que a API expõe — mesmo recorte de GET /user/:id. */
+  private toUserView(user: User, roles: Role[]): UserView {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      isAdmin: roles.includes(Role.ADMIN),
+      isActive: user.isActive,
+      roles,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
+  private signToken(id: number, roles: Role[]): { token: string; expiresAt: Date } {
     const payload = {
       sub: id,
       // Derivado, não fonte da verdade: o guard decide por `roles`. Mantido no
@@ -364,10 +395,46 @@ export class AuthService {
       '15m',
     ) as JwtSignOptions['expiresIn'];
 
-    return this.jwt.sign(payload, {
-      expiresIn,
-      secret: this.config.get('JWT_SECRET'),
-    });
+    return {
+      token: this.jwt.sign(payload, {
+        expiresIn,
+        secret: this.config.get('JWT_SECRET'),
+      }),
+      // Calculado a partir da MESMA env que o jsonwebtoken usa, em vez de
+      // decodificar o token de volta: o valor serve só para o `expires` do
+      // cookie, e quem decide de fato se o token vale continua sendo a
+      // verificação da assinatura.
+      expiresAt: new Date(Date.now() + this.accessTtlMs(String(expiresIn))),
+    };
+  }
+
+  /**
+   * Converte a notação do jsonwebtoken ('15m', '10s', '7d', ou segundos puros)
+   * em milissegundos. Só o cookie depende disto — um valor irreconhecível cai
+   * nos 15 minutos padrão em vez de derrubar o login.
+   */
+  private accessTtlMs(expiresIn: string): number {
+    const PADRAO_MS = 15 * 60 * 1000;
+    const UNIDADES: Record<string, number> = {
+      s: 1_000,
+      m: 60_000,
+      h: 3_600_000,
+      d: 86_400_000,
+    };
+
+    const match = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?$/i.exec(expiresIn.trim());
+    if (!match) {
+      this.logger.warn(
+        `JWT_EXPIRES_IN="${expiresIn}" não é uma duração reconhecida; ` +
+          'o cookie de acesso usará 15m.',
+      );
+      return PADRAO_MS;
+    }
+
+    const [, valor, unidade] = match;
+    if (unidade?.toLowerCase() === 'ms') return Number(valor);
+    // Sem unidade, o jsonwebtoken interpreta o número como SEGUNDOS.
+    return Number(valor) * (UNIDADES[unidade?.toLowerCase() ?? 's'] ?? 1_000);
   }
 
   /**

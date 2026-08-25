@@ -30,6 +30,13 @@ jobs:
       JWT_SECRET: ci-only-secret-nao-usar-em-producao-0123456789
       FRONT_URL: http://localhost:3001
       PORT: 3000
+      # NÃO acrescente NODE_ENV=production aqui achando que aproxima da
+      # produção. Duas coisas deste job dependem de ficar fora dela:
+      #   - a sonda de readiness bate em /api/docs, e o Swagger só é montado
+      #     fora de produção;
+      #   - os cookies de sessão sairiam com o atributo `Secure`, e o curl se
+      #     recusa a enviá-los sobre http — o smoke test de autenticação
+      #     inteiro cairia, sem mencionar cookie nem Secure em lugar nenhum.
 
     steps:
       - name: Checkout
@@ -93,15 +100,41 @@ jobs:
           fi
           echo "OK: signup do primeiro usuário (201)"
 
-          # 3) Login do primeiro usuário funciona e retorna token (conta ativa)
-          body=$(curl -s -X POST http://localhost:3000/auth/signin \
-            -H 'Content-Type: application/json' \
-            -d '{"email":"ci@teste.com","pass":"Password123"}')
-          echo "$body" | grep -q '"token"' || {
-            echo "::error::Signin não retornou token: $body"
+          # 3) Login do primeiro usuário (conta ativa): grava os dois cookies
+          #    httpOnly e devolve o perfil no corpo.
+          #
+          #    Este passo já procurou '"token"' no corpo. Aquilo nunca foi um teste
+          #    de login — era um proxy ("veio token, logo funciona") que virou
+          #    um teste do contrato que a migração para cookie revogou.
+          code=$(curl -s -o signin.json -D signin.headers -c cookies.txt -w '%{http_code}' -X POST http://localhost:3000/auth/signin -H 'Content-Type: application/json' -d '{"email":"ci@teste.com","pass":"Password123"}')
+          if [ "$code" != "201" ]; then
+            echo "::error::Signin deveria retornar 201, retornou $code"
+            cat signin.json; cat app.log; exit 1
+          fi
+
+          # O e-mail, e não só a presença de "user": prova que o perfil é o de
+          # quem autenticou.
+          grep -q '"email":"ci@teste.com"' signin.json || {
+            echo "::error::Signin não devolveu o perfil de quem autenticou: $(cat signin.json)"
             cat app.log; exit 1
           }
-          echo "OK: signin retornou token"
+
+          # Guarda de regressão do motivo inteiro do cookie httpOnly: se o token
+          # voltar ao corpo, o JavaScript da página volta a conseguir lê-lo e
+          # guardá-lo, e o cookie perde a razão de existir.
+          if grep -q '"token"' signin.json; then
+            echo "::error::Signin vazou token no corpo: $(cat signin.json)"
+            cat app.log; exit 1
+          fi
+
+          for cookie in labflow_access labflow_refresh; do
+            grep -i "^set-cookie: $cookie=" signin.headers | grep -qi 'HttpOnly' || {
+              echo "::error::Cookie $cookie ausente ou sem HttpOnly no signin"
+              grep -i '^set-cookie' signin.headers || true
+              cat app.log; exit 1
+            }
+          done
+          echo "OK: signin gravou os dois cookies httpOnly e devolveu o perfil"
 
           # 4) Segundo cadastro nasce pendente: signin deve retornar 403
           curl -s -o /dev/null -X POST http://localhost:3000/auth/signup \
@@ -115,6 +148,66 @@ jobs:
             cat app.log; exit 1
           fi
           echo "OK: conta pendente bloqueada no login (403)"
+
+      # O que o smoke test antigo não conseguia cobrir, e é o que teria pegado
+      # a quebra: a sessão inteira anda pelos cookies, sem nenhum header
+      # Authorization envolvido. Usa o cookies.txt gravado no signin acima —
+      # arquivos persistem entre steps do mesmo job.
+      - name: Smoke test — sessão por cookie
+        run: |
+          set -e
+
+          # 5) Rota protegida SEM Authorization: quem autentica é o cookie.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -b cookies.txt http://localhost:3000/user)
+          if [ "$code" != "200" ]; then
+            echo "::error::Rota protegida deveria aceitar o cookie de acesso (200), retornou $code"
+            cat app.log; exit 1
+          fi
+          echo "OK: /user autenticado só com cookie (200)"
+
+          # 6) E sem cookie nenhum, 401 — confirma que o 200 acima veio do
+          #    cookie, e não de a rota ter deixado de exigir autenticação.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/user)
+          if [ "$code" != "401" ]; then
+            echo "::error::Rota protegida sem cookie deveria retornar 401, retornou $code"
+            cat app.log; exit 1
+          fi
+          echo "OK: /user sem cookie rejeitado (401)"
+
+          # 7) Renovação: 204 sem corpo, os dois cookies regravados, sessão de pé.
+          code=$(curl -s -o /dev/null -D refresh.headers -w '%{http_code}' -b cookies.txt -c cookies.txt -X POST http://localhost:3000/auth/refresh)
+          if [ "$code" != "204" ]; then
+            echo "::error::Refresh deveria retornar 204, retornou $code"
+            cat app.log; exit 1
+          fi
+          for cookie in labflow_access labflow_refresh; do
+            grep -qi "^set-cookie: $cookie=" refresh.headers || {
+              echo "::error::Refresh não regravou o cookie $cookie"
+              grep -i '^set-cookie' refresh.headers || true
+              cat app.log; exit 1
+            }
+          done
+          code=$(curl -s -o /dev/null -w '%{http_code}' -b cookies.txt http://localhost:3000/user)
+          if [ "$code" != "200" ]; then
+            echo "::error::Sessão deveria seguir válida após o refresh, /user retornou $code"
+            cat app.log; exit 1
+          fi
+          echo "OK: refresh renovou a sessão (204, dois cookies regravados)"
+
+          # 8) Logout derruba a cadeia no servidor. O refresh seguinte apresenta
+          #    um token revogado e tem que ser recusado — é o que impede um
+          #    cookie copiado de continuar valendo depois que o usuário saiu.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -b cookies.txt -X POST http://localhost:3000/auth/logout)
+          if [ "$code" != "204" ]; then
+            echo "::error::Logout deveria retornar 204, retornou $code"
+            cat app.log; exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' -b cookies.txt -X POST http://localhost:3000/auth/refresh)
+          if [ "$code" != "401" ]; then
+            echo "::error::Refresh após logout deveria retornar 401, retornou $code"
+            cat app.log; exit 1
+          fi
+          echo "OK: logout revogou a sessão (refresh seguinte 401)"
 
       - name: Logs da aplicação (em caso de falha)
         if: failure()
