@@ -60,12 +60,33 @@ services:
 
     environment:
       MAIN_DB_URL: 'postgresql://${MAIN_DB_USER}:${MAIN_DB_PASSWORD}@db:5432/${MAIN_DB}'
+      # Lida pelo `database:` de cada @Entity. O driver do Postgres ignora esse
+      # campo ao montar o nome da tabela; passar aqui só mantém o metadado
+      # coerente com o resto da stack.
+      MAIN_DB: ${MAIN_DB}
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET}
       # Origem liberada no CORS. Hoje front e API dividem o mesmo host, então o
       # navegador nem dispara preflight — mas a variável precisa estar certa
       # para o dia em que a API ganhar subdomínio próprio.
       FRONT_URL: ${FRONT_URL}
+      # --- Sessão ---------------------------------------------------------
+      # Ausentes no .env, chegam como string vazia e o código cai nos padrões
+      # (15m / 7 dias / 30s) — o mesmo comportamento de antes de existirem
+      # aqui. Declaradas para que ajustar a sessão em produção seja editar o
+      # .env, e não este arquivo.
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS}
+      REFRESH_REUSE_GRACE_SECONDS: ${REFRESH_REUSE_GRACE_SECONDS}
+      # --- Cookies de sessão ----------------------------------------------
+      # Hoje front e API saem sob o mesmo host pelo Apache, na raiz: '/' e
+      # 'lax' (os padrões) estão corretos. Só mude se o proxy passar a publicar
+      # a API sob prefixo, ou se a API ganhar domínio de registro próprio.
+      ACCESS_COOKIE_PATH: ${ACCESS_COOKIE_PATH}
+      REFRESH_COOKIE_PATH: ${REFRESH_COOKIE_PATH}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE}
+      # Nome antigo, usado como fallback de AUTH_COOKIE_SAMESITE.
+      REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE}
       # Redefinição de senha por e-mail. Sem RESEND_API_KEY o envio fica
       # desligado e o fluxo de "esqueci minha senha" não entrega nada.
       RESEND_API_KEY: ${RESEND_API_KEY}

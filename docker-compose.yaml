@@ -2,6 +2,15 @@ services:
   front:
     build:
       context: ../LabFlow-Front
+      # NEXT_PUBLIC_* é embutida no bundle em tempo de BUILD — o env_file abaixo
+      # só alcança o runtime e não muda o valor que chega ao navegador. Por isso
+      # a URL da API também precisa vir como build arg.
+      #
+      # O Compose interpola a partir do .env DESTA pasta (LabFlow-Back/.env), não
+      # do .env do front: para apontar para outro backend, defina
+      # NEXT_PUBLIC_API_URL aqui ou no shell antes do `up --build`.
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
     image: labflow_front:latest
     ports: 
       - 3001:3001
@@ -22,9 +31,28 @@ services:
         condition: service_healthy
     environment:
       MAIN_DB_URL: "postgresql://${MAIN_DB_USER}:${MAIN_DB_PASSWORD}@db:5432/${MAIN_DB}"
+      # Lida pelo `database:` de cada @Entity. O driver do Postgres ignora esse
+      # campo na hora de montar o nome da tabela, então o efeito prático é só
+      # manter o metadado igual ao de quem roda fora do container.
+      MAIN_DB: ${MAIN_DB}
       PORT: ${PORT}
       JWT_SECRET: ${JWT_SECRET}
       FRONT_URL: ${FRONT_URL}
+      # --- Sessão ---------------------------------------------------------
+      # Sem estas, o container ignorava o .env e caía nos padrões do código
+      # (15m / 7 dias / 30s). Chave vazia continua caindo no padrão: o código
+      # trata '' como ausente (AuthService.configText/configNumber).
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS}
+      REFRESH_REUSE_GRACE_SECONDS: ${REFRESH_REUSE_GRACE_SECONDS}
+      # --- Cookies de sessão ----------------------------------------------
+      # Comparados com a URL vista pelo NAVEGADOR. Errar o path faz o cookie
+      # deixar de ser enviado e a sessão morrer em silêncio.
+      ACCESS_COOKIE_PATH: ${ACCESS_COOKIE_PATH}
+      REFRESH_COOKIE_PATH: ${REFRESH_COOKIE_PATH}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE}
+      # Nome antigo, usado como fallback de AUTH_COOKIE_SAMESITE.
+      REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE}
       # Redefinição de senha por e-mail. Sem RESEND_API_KEY o envio fica
       # desligado e o fluxo de "esqueci minha senha" não entrega nada.
       RESEND_API_KEY: ${RESEND_API_KEY}
