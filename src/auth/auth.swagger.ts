@@ -72,6 +72,55 @@ export const AuthSwagger = {
             }),
         ),
 
+    forgotPassword: () =>
+        applyDecorators(
+            SwaggerPublic(),
+            ApiOperation({
+                summary: 'Pedir link de redefinição de senha',
+                description:
+                    'Envia por e-mail um link de uso único para escolher uma nova senha. ' +
+                    'A resposta é SEMPRE a mesma, exista ou não uma conta com o endereço informado — ' +
+                    'do contrário a rota viraria um verificador de quais e-mails têm cadastro. ' +
+                    'Contas inativas (pendentes de aprovação) não recebem o link: redefinir a senha ' +
+                    'não libera o acesso delas.',
+            }),
+            ApiResponse({
+                status: 202,
+                description: 'Pedido recebido (não confirma se o e-mail existe)',
+                schema: {
+                    example: {
+                        message:
+                            'Se houver uma conta ativa com este e-mail, um link de redefinição foi enviado.',
+                    },
+                },
+            }),
+            ApiResponse({ status: 429, description: 'Muitos pedidos a partir deste IP' }),
+        ),
+
+    resetPassword: () =>
+        applyDecorators(
+            SwaggerPublic(),
+            ApiOperation({
+                summary: 'Redefinir a senha com o token recebido por e-mail',
+                description:
+                    'Consome o token (uso único) e grava a nova senha. Derruba TODAS as sessões ' +
+                    'abertas do usuário e apaga o cookie de refresh deste navegador: quem redefine ' +
+                    'a senha normalmente suspeita de conta comprometida, e um refresh de dias ' +
+                    'manteria o invasor logado depois da troca.',
+            }),
+            ApiResponse({
+                status: 200,
+                description: 'Senha redefinida',
+                schema: {
+                    example: { message: 'Senha redefinida com sucesso. Entre com a nova senha.' },
+                },
+            }),
+            ApiResponse({
+                status: 400,
+                description: 'Token inexistente, expirado, já usado, ou conta inativa',
+            }),
+        ),
+
     logout: () =>
         applyDecorators(
             SwaggerPublic(),

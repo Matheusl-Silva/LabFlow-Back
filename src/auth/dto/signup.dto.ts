@@ -7,6 +7,7 @@ import {
   Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { NormalizeEmail } from '../../common/decorators/normalize-email.decorator';
 
 export class SignUpDto {
   @ApiProperty({
@@ -22,6 +23,7 @@ export class SignUpDto {
     description: 'Email único que será usado no cadastro',
     example: 'test123@test.com',
   })
+  @NormalizeEmail()
   @IsEmail()
   @IsNotEmpty()
   email!: string;

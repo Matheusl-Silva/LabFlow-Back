@@ -2,21 +2,14 @@ import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { NormalizeEmail } from '../../common/decorators/normalize-email.decorator';
 
-export class SignInDto {
+export class ForgotPasswordDto {
   @ApiProperty({
-    description: 'Email usado no cadastro',
+    description: 'E-mail da conta que receberá o link de redefinição',
     example: 'test123@test.com',
   })
   @NormalizeEmail()
   @IsString()
+  @IsNotEmpty()
   @IsEmail()
   email!: string;
-
-  @ApiProperty({
-    description: 'Senha usada no cadastro',
-    example: 'password123',
-  })
-  @IsString()
-  @IsNotEmpty()
-  pass!: string;
 }

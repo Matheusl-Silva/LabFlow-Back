@@ -6,10 +6,21 @@ import { JwtModule } from '@nestjs/jwt';
 import { User } from '../entities/user.entity';
 import { UserRole } from '../entities/user-role.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
+import { PasswordResetToken } from '../entities/password-reset-token.entity';
+import { MailModule } from '../mail/mail.module';
 import { JwtStrategy } from '../common/strategy/jwt.strategy';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, UserRole, RefreshToken]), JwtModule.register({})],
+  imports: [
+    TypeOrmModule.forFeature([
+      User,
+      UserRole,
+      RefreshToken,
+      PasswordResetToken,
+    ]),
+    JwtModule.register({}),
+    MailModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
 })
