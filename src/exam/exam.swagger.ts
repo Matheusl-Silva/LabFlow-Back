@@ -52,6 +52,24 @@ export const ExamSwagger = {
             }),
         ),
 
+    registerExamReport: () =>
+        applyDecorators(
+            SwaggerAuthUser(),
+            ApiOperation({
+                summary: 'Registrar a emissão do laudo no histórico',
+                description:
+                    'Não gera arquivo: o laudo é montado no navegador. Esta rota apenas ' +
+                    'grava no histórico de auditoria quem emitiu o laudo do exame, e quando.',
+            }),
+            ApiParam({ name: 'id', description: 'ID do exame', type: Number }),
+            ApiResponse({
+                status: 201,
+                description: 'Emissão registrada com sucesso',
+                schema: { example: { message: 'Exam report has been registered successfully' } },
+            }),
+            ApiResponse({ status: 404, description: 'Exame não encontrado' }),
+        ),
+
     updateExam: () =>
         applyDecorators(
             SwaggerAdmin(),

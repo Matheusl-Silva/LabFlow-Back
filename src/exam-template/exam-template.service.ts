@@ -57,7 +57,16 @@ export class ExamTemplateService{
                                             .select('MAX(et.version)', 'max')
                                             .where('et.name = :name', {name: activeTemplate.name})
                                             .getRawOne<{max: number}>();
-            const newVersionDto : CreateExamTemplateDto = {...dto, name: dto.name ?? activeTemplate.name, version: (latestVersion?.max ?? activeTemplate.version) + 1}
+            // `?? activeTemplate.x` não serve aqui: `null` é um valor legítimo
+            // (limpar o material/método), e só `undefined` significa "não mexi
+            // nisso" — aí a nova versão herda o que a atual tinha.
+            const newVersionDto : CreateExamTemplateDto = {
+                ...dto,
+                name: dto.name ?? activeTemplate.name,
+                material: dto.material !== undefined ? dto.material : activeTemplate.material,
+                method: dto.method !== undefined ? dto.method : activeTemplate.method,
+                version: (latestVersion?.max ?? activeTemplate.version) + 1,
+            }
             const created = repo.create(newVersionDto);
             const saved = await repo.save(created);
 
@@ -74,8 +83,18 @@ export class ExamTemplateService{
             entity: AuditEntity.EXAM_TEMPLATE,
             entityId: id,
             userId,
-            before: { name: oldTemplate.name, schema: oldTemplate.schema },
-            after: { name: newTemplate.name, schema: newTemplate.schema },
+            before: {
+                name: oldTemplate.name,
+                schema: oldTemplate.schema,
+                material: oldTemplate.material,
+                method: oldTemplate.method,
+            },
+            after: {
+                name: newTemplate.name,
+                schema: newTemplate.schema,
+                material: newTemplate.material,
+                method: newTemplate.method,
+            },
         });
 
         return newTemplate;

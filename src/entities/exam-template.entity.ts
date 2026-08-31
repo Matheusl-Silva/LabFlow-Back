@@ -14,6 +14,16 @@ export class ExamTemplate {
 
     @Column({name: 'schema_json', type: 'jsonb'})
     schema!: object;
+
+    // Material e método são propriedades do TIPO de exame, não do exame lançado:
+    // hemograma é sempre sangue total / citometria de fluxo. Ficam no modelo para
+    // o operador não redigitar a cada lançamento. Nulos nos modelos antigos — o
+    // laudo simplesmente omite a linha.
+    @Column({type: 'varchar', length: 120, nullable: true})
+    material!: string | null;
+
+    @Column({type: 'varchar', length: 120, nullable: true})
+    method!: string | null;
     
     @Column({default: true})
     active!: boolean

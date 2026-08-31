@@ -8,6 +8,11 @@ export enum AuditAction {
    * "editou" sugere que alguém mexeu no cadastro do item (nome, mínimo, tipo).
    */
   ADJUST = 'ADJUST',
+  /**
+   * Emissão do laudo. Não altera nada no exame, mas é a ação que interessa a
+   * quem audita: mostra quem levou o resultado para fora do sistema, e quando.
+   */
+  PRINT = 'PRINT',
 }
 
 export enum AuditEntity {

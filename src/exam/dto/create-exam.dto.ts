@@ -1,5 +1,5 @@
-import { IsDateString, IsInt, IsObject } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsDateString, IsInt, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateExamDto {
   @ApiProperty({
@@ -46,4 +46,16 @@ export class CreateExamDto {
   })
   @IsObject()
   data!: object;
+
+  @ApiPropertyOptional({
+    description:
+      'Observação do laudo (particularidades deste resultado, como amostra ' +
+      'hemolisada ou jejum irregular). Material e método NÃO entram aqui: são ' +
+      'do modelo de exame.',
+    example: 'Amostra levemente hemolisada.',
+  })
+  @IsString()
+  @MaxLength(1000)
+  @IsOptional()
+  observation?: string | null;
 }

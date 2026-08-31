@@ -28,6 +28,11 @@ export class Exam {
     @Column()
     date!: Date;
 
+    // Observação do laudo. Diferente de material/método (que vivem no modelo),
+    // esta varia por resultado: amostra hemolisada, jejum irregular, repetição.
+    @Column({type: 'text', nullable: true})
+    observation!: string | null;
+
     @ManyToOne(() => User, (user) => user.examsAsPreceptor)
     @JoinColumn({name: 'preceptor_id'})
     preceptor!: User;

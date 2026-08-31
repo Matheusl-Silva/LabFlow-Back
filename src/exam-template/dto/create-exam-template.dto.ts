@@ -1,6 +1,6 @@
-import { IsNotEmpty, IsInt, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
 import { IsSchema } from '../validators/exam-template.decorators';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateExamTemplateDto {
   @ApiProperty({
@@ -31,6 +31,26 @@ export class CreateExamTemplateDto {
   })
   @IsSchema()
   schema!: object;
+
+  @ApiPropertyOptional({
+    description:
+      'Material biológico analisado. Fixo por tipo de exame, por isso fica no ' +
+      'modelo: todo laudo gerado a partir dele já sai com este valor.',
+    example: 'Sangue total (EDTA)',
+  })
+  @IsString()
+  @MaxLength(120)
+  @IsOptional()
+  material?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Método/técnica usada na análise. Também fixo por tipo de exame.',
+    example: 'Citometria de fluxo',
+  })
+  @IsString()
+  @MaxLength(120)
+  @IsOptional()
+  method?: string | null;
 
   @ApiProperty({
     description: 'Versão do template',

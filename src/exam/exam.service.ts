@@ -74,7 +74,11 @@ export class ExamService {
     .leftJoin("exam.examTemplate", "examTemplate")
     .select([
       "exam",
-      "examTemplate.schema"
+      "examTemplate.schema",
+      // Material e método vivem no modelo, mas quem os imprime é o laudo do
+      // exame — sem isso o cliente precisaria de um GET /template/:id extra.
+      "examTemplate.material",
+      "examTemplate.method"
     ])
     .where({id})
     .getOne();
@@ -101,9 +105,12 @@ export class ExamService {
           name: true
         },
         examTemplate:{
-          schema: true
+          schema: true,
+          material: true,
+          method: true
         },
-        data: true
+        data: true,
+        observation: true
       },
     });
 
@@ -141,6 +148,28 @@ export class ExamService {
       }
       throw err;
     }
+  }
+
+  /**
+   * Registra no histórico que o laudo deste exame foi emitido.
+   *
+   * O laudo é gerado no navegador (window.print()), então o backend jamais
+   * saberia da emissão por conta própria — o cliente avisa antes de imprimir.
+   * Não altera nada no exame: o evento em si (quem, qual exame, quando) é a
+   * informação que interessa a quem audita, e é o que o log já guarda. Daí
+   * `before`/`after` ficarem nulos.
+   */
+  async registerReport(id: number, userId: number): Promise<void> {
+    // Só a existência importa: nada do conteúdo do exame vai para o log.
+    const exists = await this.repo.findOne({where: {id}, select: {id: true}});
+    if(!exists) throw new NotFoundException("Exam not found");
+
+    await this.audit.record({
+      action: AuditAction.PRINT,
+      entity: AuditEntity.EXAM,
+      entityId: id,
+      userId,
+    });
   }
 
   async softDelete(id: number, userId: number): Promise<boolean>{

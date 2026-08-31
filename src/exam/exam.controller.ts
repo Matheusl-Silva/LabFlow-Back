@@ -41,6 +41,16 @@ export class ExamController {
         return this.service.getByPatientId(patientId);
     }
 
+    // Emitir laudo é leitura, não edição: fica com os mesmos papéis da classe
+    // (quem consegue abrir o exame consegue imprimi-lo). O POST existe só para
+    // o histórico registrar a emissão — o PDF é gerado no navegador.
+    @ExamSwagger.registerExamReport()
+    @Post(':id/report')
+    async registerReport(@Param('id', ParseIntPipe) id: number, @UserFromJwt() user: JwtPayload): Promise<{message: string}>{
+        await this.service.registerReport(id, user.id);
+        return {message: "Exam report has been registered successfully"};
+    }
+
     @ExamSwagger.createExam()
     @Post()
     async create(@Body() dto: CreateExamDto, @UserFromJwt() user: JwtPayload): Promise<Exam>{
