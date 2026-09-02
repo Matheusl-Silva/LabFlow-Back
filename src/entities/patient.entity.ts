@@ -17,6 +17,11 @@ export enum Period {
   NIGHT = 'Noturno',
 }
 
+export enum Sex {
+  MALE = 'Masculino',
+  FEMALE = 'Feminino',
+}
+
 @Entity({ name: 'patients', database: process.env.MAIN_DB })
 // Unicidade só entre registros ATIVOS: um CPF/e-mail de paciente excluído
 // (soft delete) fica livre para ser recadastrado. O índice parcial exclui as
@@ -36,6 +41,12 @@ export class Patient {
 
   @Column({ type: 'enum', enum: Period })
   period!: Period;
+
+  // Nulo nos pacientes cadastrados antes deste campo existir: inventar um sexo
+  // para eles seria pior do que admitir que a informação falta. O cadastro novo
+  // exige o valor (CreatePatientDto), então a base se completa com o tempo.
+  @Column({ type: 'enum', enum: Sex, nullable: true })
+  sex!: Sex | null;
 
   @Column({nullable: true})
   medication!: string;
