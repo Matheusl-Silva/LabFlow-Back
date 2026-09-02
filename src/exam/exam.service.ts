@@ -110,7 +110,8 @@ export class ExamService {
           method: true
         },
         data: true,
-        observation: true
+        observation: true,
+        internalObservation: true
       },
     });
 

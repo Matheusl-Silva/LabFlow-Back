@@ -28,10 +28,17 @@ export class Exam {
     @Column()
     date!: Date;
 
-    // Observação do laudo. Diferente de material/método (que vivem no modelo),
-    // esta varia por resultado: amostra hemolisada, jejum irregular, repetição.
+    // Observação IMPRESSA: sai no laudo. Diferente de material/método (que
+    // vivem no modelo), esta varia por resultado: amostra hemolisada, jejum
+    // irregular, repetição.
     @Column({type: 'text', nullable: true})
     observation!: string | null;
+
+    // Observação NÃO impressa: recado interno do laboratório sobre este exame
+    // (refazer a coleta, conferir com o preceptor). Fica no sistema e jamais é
+    // renderizada no laudo — é a única diferença em relação à de cima.
+    @Column({name: 'internal_observation', type: 'text', nullable: true})
+    internalObservation!: string | null;
 
     @ManyToOne(() => User, (user) => user.examsAsPreceptor)
     @JoinColumn({name: 'preceptor_id'})
