@@ -148,6 +148,29 @@ export class UserService {
     return this.userRepo.find({ select: { id: true, name: true } });
   }
 
+  /**
+   * Quem pode ser preceptor ou responsável por um exame: administradores
+   * ativos, e mais ninguém. Assinar um laudo é responsabilidade técnica pelo
+   * resultado — não é porque alguém consegue LANÇAR o exame (papel EXAMS) que
+   * pode responder por ele.
+   *
+   * Devolve só `{id, name}`: a lista alimenta um <select> e é visível a
+   * qualquer usuário autenticado, inclusive a quem não administra usuários —
+   * e-mail, papéis e situação da conta continuam restritos ao admin.
+   *
+   * Conta inativa fica de fora: não loga, não opera, não assina.
+   */
+  getExamStaff(): Promise<User[]> {
+    return this.userRepo.find({
+      where: { isAdmin: true, isActive: true },
+      // `isAdmin`/`isActive` saem no payload mesmo sendo constantes aqui (todo
+      // mundo na lista é admin ativo): sem eles o cliente teria de assumir o
+      // valor, e um dia assumiria errado.
+      select: { id: true, name: true, isAdmin: true, isActive: true },
+      order: { name: 'ASC' },
+    });
+  }
+
   async getById(id: number): Promise<UserView> {
     const user = await this.userRepo.findOne({
       where: { id },

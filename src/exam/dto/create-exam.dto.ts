@@ -1,5 +1,5 @@
-import { IsDateString, IsInt, IsObject } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsDateString, IsInt, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateExamDto {
   @ApiProperty({
@@ -46,4 +46,27 @@ export class CreateExamDto {
   })
   @IsObject()
   data!: object;
+
+  @ApiPropertyOptional({
+    description:
+      'Observação IMPRESSA: sai no laudo entregue ao paciente ' +
+      '(particularidades deste resultado, como amostra hemolisada ou jejum ' +
+      'irregular). Material e método NÃO entram aqui: são do modelo de exame.',
+    example: 'Amostra levemente hemolisada.',
+  })
+  @IsString()
+  @MaxLength(1000)
+  @IsOptional()
+  observation?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Observação NÃO impressa: recado interno do laboratório sobre este ' +
+      'exame. Fica no sistema e nunca aparece no laudo.',
+    example: 'Repetir a dosagem na próxima coleta; conferir com o preceptor.',
+  })
+  @IsString()
+  @MaxLength(1000)
+  @IsOptional()
+  internalObservation?: string | null;
 }

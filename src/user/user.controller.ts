@@ -42,6 +42,15 @@ export class UserController {
     }
   }
 
+  // ANTES de @Get(':id'): o Nest casa as rotas na ordem de declaração, e
+  // ':id' (com ParseIntPipe) engoliria "exam-staff" devolvendo 400.
+  @UserSwagger.findExamStaff()
+  @Authenticated()
+  @Get('exam-staff')
+  async getExamStaff(): Promise<User[]> {
+    return await this.userService.getExamStaff();
+  }
+
   @UserSwagger.findUserById()
   @Authenticated()
   @Get(':id')

@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Exam } from '../entities/exam.entity';
-import { QueryFailedError, Repository } from 'typeorm';
+import { In, QueryFailedError, Repository } from 'typeorm';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { isValidExam } from './validators/exam.validator';
 import { ExamTemplate } from '../entities/exam-template.entity';
+import { User } from '../entities/user.entity';
 import { UpdateExamDto } from './dto/update-exam.dto';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditEntity } from '../audit/audit.types';
@@ -15,14 +16,43 @@ export class ExamService {
     @InjectRepository(Exam) private readonly repo: Repository<Exam>,
     @InjectRepository(ExamTemplate)
     private readonly templateRepo: Repository<ExamTemplate>,
+    @InjectRepository(User) private readonly userRepo: Repository<User>,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Preceptor e responsável têm de ser administradores ativos — mesma regra
+   * que o <select> do formulário aplica (GET /user/exam-staff). Repetida aqui
+   * porque a tela é conveniência, não autorização: um POST direto na API
+   * passaria por cima dela.
+   *
+   * Só valida o que o DTO trouxe: no PUT, campo ausente significa "não mexer".
+   * `is_admin`/`is_active` são as colunas que a listagem também consulta, então
+   * as duas pontas nunca discordam sobre quem é elegível.
+   */
+  private async assertExamStaff(ids: (number | undefined)[]): Promise<void> {
+    const wanted = [...new Set(ids.filter((id): id is number => id != null))];
+    if (wanted.length === 0) return;
+
+    const eligible = await this.userRepo.find({
+      where: { id: In(wanted), isAdmin: true, isActive: true },
+      select: { id: true },
+    });
+
+    if (eligible.length !== wanted.length) {
+      throw new BadRequestException(
+        'Preceptor e responsável devem ser administradores ativos',
+      );
+    }
+  }
 
   async create(dto: CreateExamDto, userId: number): Promise<Exam> {
     const template = await this.templateRepo.findOneBy({id: dto.examTemplateId});
     if(!template) throw new BadRequestException("Exam template does not exist");
 
     if(!isValidExam(dto.data, template.schema)) throw new BadRequestException("The exam does not follow it's schema");
+
+    await this.assertExamStaff([dto.preceptorId, dto.responsibleId]);
 
     const exam = this.repo.create(dto);
     try {
@@ -54,6 +84,10 @@ export class ExamService {
       select:{
         id: true,
         date: true,
+        // `date` é a data do exame (só o dia importa na listagem), então
+        // empates são a regra, não a exceção. `createdAt` desempata pela ordem
+        // de lançamento e vai no payload para o front aplicar o mesmo critério.
+        createdAt: true,
         preceptor: {
           name: true
         },
@@ -65,7 +99,9 @@ export class ExamService {
         preceptor: true,
         examTemplate: true
       },
-      where: { patientId }
+      where: { patientId },
+      // Mais recentes primeiro; no empate de data, o lançado por último vem antes.
+      order: { date: 'DESC', createdAt: 'DESC' }
     });
   }
 
@@ -74,7 +110,11 @@ export class ExamService {
     .leftJoin("exam.examTemplate", "examTemplate")
     .select([
       "exam",
-      "examTemplate.schema"
+      "examTemplate.schema",
+      // Material e método vivem no modelo, mas quem os imprime é o laudo do
+      // exame — sem isso o cliente precisaria de um GET /template/:id extra.
+      "examTemplate.material",
+      "examTemplate.method"
     ])
     .where({id})
     .getOne();
@@ -101,9 +141,13 @@ export class ExamService {
           name: true
         },
         examTemplate:{
-          schema: true
+          schema: true,
+          material: true,
+          method: true
         },
-        data: true
+        data: true,
+        observation: true,
+        internalObservation: true
       },
     });
 
@@ -119,6 +163,8 @@ export class ExamService {
     if(!template) throw new InternalServerErrorException("Template not found");
 
     if(dto.data && !isValidExam(dto.data, template.schema)) throw new BadRequestException("The exam does not follow it's schema");
+
+    await this.assertExamStaff([dto.preceptorId, dto.responsibleId]);
 
     const before = { ...exam }; // snapshot antes de alterar
 
@@ -141,6 +187,28 @@ export class ExamService {
       }
       throw err;
     }
+  }
+
+  /**
+   * Registra no histórico que o laudo deste exame foi emitido.
+   *
+   * O laudo é gerado no navegador (window.print()), então o backend jamais
+   * saberia da emissão por conta própria — o cliente avisa antes de imprimir.
+   * Não altera nada no exame: o evento em si (quem, qual exame, quando) é a
+   * informação que interessa a quem audita, e é o que o log já guarda. Daí
+   * `before`/`after` ficarem nulos.
+   */
+  async registerReport(id: number, userId: number): Promise<void> {
+    // Só a existência importa: nada do conteúdo do exame vai para o log.
+    const exists = await this.repo.findOne({where: {id}, select: {id: true}});
+    if(!exists) throw new NotFoundException("Exam not found");
+
+    await this.audit.record({
+      action: AuditAction.PRINT,
+      entity: AuditEntity.EXAM,
+      entityId: id,
+      userId,
+    });
   }
 
   async softDelete(id: number, userId: number): Promise<boolean>{

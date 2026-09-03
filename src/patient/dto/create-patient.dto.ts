@@ -1,6 +1,6 @@
 import { IsString, IsNotEmpty, IsEmail, IsEnum, IsPhoneNumber, IsOptional, IsDateString, MaxLength} from "class-validator"
 import { Transform } from "class-transformer";
-import { Period } from "../../entities/patient.entity";
+import { Period, Sex } from "../../entities/patient.entity";
 import { IsCPF } from "../../common/decorators/is-cpf.decorator";
 import {ApiProperty, ApiPropertyOptional} from "@nestjs/swagger";
 
@@ -31,6 +31,17 @@ export class CreatePatientDto{
     @IsEnum(Period)
     @IsNotEmpty()
     period!:Period
+
+    @ApiProperty({
+        description:
+            "Sexo do paciente. Define quais valores de referência se aplicam ao " +
+            "laudo. Obrigatório no cadastro novo; pacientes antigos podem estar sem.",
+        enum: Sex,
+        enumName: "Sex",
+    })
+    @IsEnum(Sex)
+    @IsNotEmpty()
+    sex!:Sex
 
     @ApiPropertyOptional({
         description: "Medicação em uso pelo paciente, se houver",

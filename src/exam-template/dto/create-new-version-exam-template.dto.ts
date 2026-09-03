@@ -35,4 +35,24 @@ export class CreateNewVersionExamTemplateDto {
   })
   @IsSchema()
   schema!: object;
+
+  @ApiPropertyOptional({
+    description:
+      'Material biológico analisado. Fixo por tipo de exame, por isso fica no ' +
+      'modelo: todo laudo gerado a partir dele já sai com este valor.',
+    example: 'Sangue total (EDTA)',
+  })
+  @IsString()
+  @MaxLength(120)
+  @IsOptional()
+  material?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Método/técnica usada na análise. Também fixo por tipo de exame.',
+    example: 'Citometria de fluxo',
+  })
+  @IsString()
+  @MaxLength(120)
+  @IsOptional()
+  method?: string | null;
 }
