@@ -1,7 +1,7 @@
 import { applyDecorators } from "@nestjs/common"
 import { ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger"
 import { User } from "../entities/user.entity"
-import { SwaggerAdmin } from "../common/swagger.decorators"
+import { SwaggerAdmin, SwaggerAuthUser } from "../common/swagger.decorators"
 
 export const UserSwagger = {
     findUsers: () =>
@@ -11,6 +11,21 @@ export const UserSwagger = {
             ApiResponse({
                 status: 200,
                 description: 'Lista de usuários retornada com sucesso',
+                type: [User],
+            }),
+        ),
+
+    findExamStaff: () =>
+        applyDecorators(
+            SwaggerAuthUser(),
+            ApiOperation({
+                summary:
+                    'Listar quem pode ser preceptor/responsável de exame ' +
+                    '(administradores ativos)',
+            }),
+            ApiResponse({
+                status: 200,
+                description: 'Lista de {id, name} retornada com sucesso',
                 type: [User],
             }),
         ),
