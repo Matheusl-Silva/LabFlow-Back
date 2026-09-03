@@ -84,6 +84,10 @@ export class ExamService {
       select:{
         id: true,
         date: true,
+        // `date` é a data do exame (só o dia importa na listagem), então
+        // empates são a regra, não a exceção. `createdAt` desempata pela ordem
+        // de lançamento e vai no payload para o front aplicar o mesmo critério.
+        createdAt: true,
         preceptor: {
           name: true
         },
@@ -95,7 +99,9 @@ export class ExamService {
         preceptor: true,
         examTemplate: true
       },
-      where: { patientId }
+      where: { patientId },
+      // Mais recentes primeiro; no empate de data, o lançado por último vem antes.
+      order: { date: 'DESC', createdAt: 'DESC' }
     });
   }
 
