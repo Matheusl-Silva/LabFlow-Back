@@ -1,12 +1,13 @@
 import { applyDecorators } from '@nestjs/common'
+import { Role } from '../common/enums/role.enum'
 import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger'
 import { Exam } from '../entities/exam.entity'
-import { SwaggerAdmin, SwaggerAuthUser } from '../common/swagger.decorators'
+import { SwaggerRoles } from '../common/swagger.decorators'
 
 export const ExamSwagger = {
     findExams: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAMS, Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Listar todos os exames' }),
             ApiResponse({
                 status: 200,
@@ -17,7 +18,7 @@ export const ExamSwagger = {
 
     findExamById: () =>
         applyDecorators(
-            SwaggerAuthUser(),
+            SwaggerRoles(Role.EXAMS, Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Buscar exame por ID' }),
             ApiParam({ name: 'id', description: 'ID do exame', type: Number }),
             ApiResponse({
@@ -30,7 +31,7 @@ export const ExamSwagger = {
 
     findExamsByPatientId: () =>
         applyDecorators(
-            SwaggerAuthUser(),
+            SwaggerRoles(Role.EXAMS, Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Listar exames por ID do paciente' }),
             ApiParam({ name: 'id', description: 'ID do paciente', type: Number }),
             ApiResponse({
@@ -43,7 +44,7 @@ export const ExamSwagger = {
 
     createExam: () =>
         applyDecorators(
-            SwaggerAuthUser(),
+            SwaggerRoles(Role.EXAMS, Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Criar novo exame' }),
             ApiResponse({
                 status: 201,
@@ -54,7 +55,7 @@ export const ExamSwagger = {
 
     registerExamReport: () =>
         applyDecorators(
-            SwaggerAuthUser(),
+            SwaggerRoles(Role.EXAMS, Role.EXAM_TEMPLATES),
             ApiOperation({
                 summary: 'Registrar a emissão do laudo no histórico',
                 description:
@@ -72,7 +73,7 @@ export const ExamSwagger = {
 
     updateExam: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Atualizar dados de exame' }),
             ApiParam({ name: 'id', description: 'ID do exame', type: Number }),
             ApiResponse({
@@ -85,7 +86,7 @@ export const ExamSwagger = {
 
     deleteExam: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Deletar exame (soft delete)' }),
             ApiParam({ name: 'id', description: 'ID do exame', type: Number }),
             ApiResponse({

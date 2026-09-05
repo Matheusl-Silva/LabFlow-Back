@@ -1,12 +1,13 @@
 import { applyDecorators } from '@nestjs/common'
+import { Role } from '../common/enums/role.enum'
 import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger'
 import { Patient } from '../entities/patient.entity'
-import { SwaggerAdmin, SwaggerAuthUser } from '../common/swagger.decorators'
+import { SwaggerRoles } from '../common/swagger.decorators'
 
 export const PatientSwagger = {
     findPatients: () =>
         applyDecorators(
-            SwaggerAuthUser(),
+            SwaggerRoles(Role.PATIENTS, Role.EXAMS, Role.EXAM_TEMPLATES, Role.ANAMNESIS),
             ApiOperation({ summary: 'Listar todos os pacientes' }),
             ApiResponse({
                 status: 200,
@@ -17,7 +18,7 @@ export const PatientSwagger = {
 
     findPatientById: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.PATIENTS, Role.EXAMS, Role.EXAM_TEMPLATES, Role.ANAMNESIS),
             ApiOperation({ summary: 'Buscar paciente por ID' }),
             ApiParam({ name: 'id', description: 'ID do paciente', type: Number }),
             ApiResponse({
@@ -30,7 +31,7 @@ export const PatientSwagger = {
 
     createPatient: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.PATIENTS),
             ApiOperation({ summary: 'Cadastrar novo paciente' }),
             ApiResponse({
                 status: 201,
@@ -42,7 +43,7 @@ export const PatientSwagger = {
 
     updatePatient: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.PATIENTS),
             ApiOperation({ summary: 'Atualizar dados de paciente' }),
             ApiParam({ name: 'id', description: 'ID do paciente', type: Number }),
             ApiResponse({
@@ -55,7 +56,7 @@ export const PatientSwagger = {
 
     deletePatient: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.PATIENTS),
             ApiOperation({ summary: 'Deletar paciente' }),
             ApiParam({ name: 'id', description: 'ID do paciente', type: Number }),
             ApiResponse({

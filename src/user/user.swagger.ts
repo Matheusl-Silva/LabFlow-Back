@@ -6,8 +6,15 @@ import { SwaggerAdmin, SwaggerAuthUser } from "../common/swagger.decorators"
 export const UserSwagger = {
     findUsers: () =>
         applyDecorators(
-            SwaggerAdmin(),
-            ApiOperation({ summary: 'Listar todos os usuários' }),
+            // @Authenticated() no guard: qualquer logado chama. Quem restringe
+            // é o handler, devolvendo recortes diferentes conforme o perfil.
+            SwaggerAuthUser(),
+            ApiOperation({
+                summary: 'Listar usuários',
+                description:
+                    'Administrador recebe a lista completa; usuário comum ' +
+                    'recebe o recorte reduzido.',
+            }),
             ApiResponse({
                 status: 200,
                 description: 'Lista de usuários retornada com sucesso',
@@ -32,13 +39,23 @@ export const UserSwagger = {
 
     findUserById: () =>
         applyDecorators(
-            SwaggerAdmin(),
-            ApiOperation({ summary: 'Buscar usuário por ID' }),
+            // @Authenticated() no guard; o handler é que exige ser admin OU o
+            // próprio usuário. Anotar como SwaggerAdmin escondia o segundo caso.
+            SwaggerAuthUser(),
+            ApiOperation({
+                summary: 'Buscar usuário por ID',
+                description:
+                    'Permitido ao administrador ou ao próprio usuário consultado.',
+            }),
             ApiParam({ name: 'id', description: 'ID do usuário', type: Number }),
             ApiResponse({
                 status: 200,
                 description: 'Usuário retornado com sucesso',
                 type: User,
+            }),
+            ApiResponse({
+                status: 403,
+                description: 'Consulta ao registro de outro usuário sem ser admin',
             }),
             ApiResponse({ status: 404, description: 'Usuário não encontrado' }),
         ),

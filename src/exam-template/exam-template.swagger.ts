@@ -1,12 +1,13 @@
 import { applyDecorators } from '@nestjs/common'
+import { Role } from '../common/enums/role.enum'
 import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger'
 import { ExamTemplate } from '../entities/exam-template.entity'
-import { SwaggerAdmin } from '../common/swagger.decorators'
+import { SwaggerRoles } from '../common/swagger.decorators'
 
 export const ExamTemplateSwagger = {
     findActiveTemplates: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES, Role.EXAMS),
             ApiOperation({ summary: 'Listar templates de exame ativos' }),
             ApiResponse({
                 status: 200,
@@ -17,7 +18,7 @@ export const ExamTemplateSwagger = {
 
     findAllTemplates: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Listar todos os templates de exame' }),
             ApiResponse({
                 status: 200,
@@ -28,7 +29,7 @@ export const ExamTemplateSwagger = {
 
     findTemplateById: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES, Role.EXAMS),
             ApiOperation({ summary: 'Buscar template de exame por ID' }),
             ApiParam({ name: 'id', description: 'ID do template', type: Number }),
             ApiResponse({
@@ -41,7 +42,7 @@ export const ExamTemplateSwagger = {
 
     createTemplate: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Criar novo template de exame' }),
             ApiResponse({
                 status: 201,
@@ -52,7 +53,7 @@ export const ExamTemplateSwagger = {
 
     createNewVersion: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Criar nova versão de um template de exame' }),
             ApiParam({ name: 'id', description: 'ID do template original', type: Number }),
             ApiResponse({
@@ -65,7 +66,7 @@ export const ExamTemplateSwagger = {
 
     updateTemplate: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Atualizar dados de template de exame' }),
             ApiParam({ name: 'id', description: 'ID do template', type: Number }),
             ApiResponse({
@@ -78,7 +79,7 @@ export const ExamTemplateSwagger = {
 
     deleteTemplate: () =>
         applyDecorators(
-            SwaggerAdmin(),
+            SwaggerRoles(Role.EXAM_TEMPLATES),
             ApiOperation({ summary: 'Deletar template de exame (soft delete)' }),
             ApiParam({ name: 'id', description: 'ID do template', type: Number }),
             ApiResponse({

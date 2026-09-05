@@ -1,12 +1,13 @@
 import { applyDecorators } from '@nestjs/common';
+import { Role } from '../common/enums/role.enum';
 import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { StockItem } from '../entities/stock-item.entity';
-import { SwaggerAdmin, SwaggerAuthUser } from '../common/swagger.decorators';
+import { SwaggerRoles } from '../common/swagger.decorators';
 
 export const StockSwagger = {
   findItems: () =>
     applyDecorators(
-      SwaggerAuthUser(),
+      SwaggerRoles(Role.STOCK),
       ApiOperation({ summary: 'Listar itens do estoque' }),
       ApiResponse({
         status: 200,
@@ -17,7 +18,7 @@ export const StockSwagger = {
 
   findItemById: () =>
     applyDecorators(
-      SwaggerAuthUser(),
+      SwaggerRoles(Role.STOCK),
       ApiOperation({ summary: 'Buscar item de estoque por ID' }),
       ApiParam({ name: 'id', description: 'ID do item', type: Number }),
       ApiResponse({ status: 200, description: 'Item retornado com sucesso', type: StockItem }),
@@ -26,7 +27,7 @@ export const StockSwagger = {
 
   createItem: () =>
     applyDecorators(
-      SwaggerAdmin(),
+      SwaggerRoles(Role.STOCK),
       ApiOperation({ summary: 'Cadastrar item no estoque' }),
       ApiResponse({ status: 201, description: 'Item cadastrado com sucesso', type: StockItem }),
       ApiResponse({ status: 409, description: 'Já existe um item com esse nome' }),
@@ -34,7 +35,7 @@ export const StockSwagger = {
 
   updateItem: () =>
     applyDecorators(
-      SwaggerAdmin(),
+      SwaggerRoles(Role.STOCK),
       ApiOperation({ summary: 'Atualizar item do estoque' }),
       ApiParam({ name: 'id', description: 'ID do item', type: Number }),
       ApiResponse({ status: 200, description: 'Item atualizado com sucesso', type: StockItem }),
@@ -43,7 +44,7 @@ export const StockSwagger = {
 
   adjustQuantity: () =>
     applyDecorators(
-      SwaggerAuthUser(),
+      SwaggerRoles(Role.STOCK),
       ApiOperation({
         summary: 'Registrar entrada/saída de estoque',
         description:
@@ -57,7 +58,7 @@ export const StockSwagger = {
 
   deleteItem: () =>
     applyDecorators(
-      SwaggerAdmin(),
+      SwaggerRoles(Role.STOCK),
       ApiOperation({ summary: 'Excluir item do estoque' }),
       ApiParam({ name: 'id', description: 'ID do item', type: Number }),
       ApiResponse({

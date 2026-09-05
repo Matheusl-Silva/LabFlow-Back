@@ -4,6 +4,7 @@ import {
   ApiForbiddenResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger'
+import { Role } from './enums/role.enum'
 
 /**
  * Rota pública — espelha o decorator @Public() do guard.
@@ -12,9 +13,12 @@ import {
 export const SwaggerPublic = () => applyDecorators()
 
 /**
- * Rota de usuário autenticado — espelha os decorators @Authenticated() e
- * @Roles() do guard. Exige token JWT válido. Exibe cadeado "access-token" no
- * Swagger UI.
+ * Rota de usuário autenticado — espelha o decorator @Authenticated() do guard.
+ * Exige token JWT válido, papel nenhum em particular. Exibe cadeado
+ * "access-token" no Swagger UI.
+ *
+ * Para rota liberada por papel use SwaggerRoles(): ela diz QUAIS papéis
+ * passam, que é a pergunta de quem lê a documentação.
  */
 export const SwaggerAuthUser = () =>
   applyDecorators(
@@ -31,4 +35,28 @@ export const SwaggerAdmin = () =>
     ApiBearerAuth('admin-token'),
     ApiUnauthorizedResponse({ description: 'Não autenticado — token ausente ou inválido' }),
     ApiForbiddenResponse({ description: 'Acesso negado — requer perfil admin' }),
+  )
+
+/**
+ * Rota liberada por papel — espelha @Roles(...) do guard.
+ *
+ * Existe porque anotá-las como SwaggerAdmin era herança do modelo binário
+ * admin/comum: dizia "requer perfil admin" para rotas que um usuário comum com
+ * o papel certo acessa. Aqui os papéis aceitos aparecem na própria descrição
+ * do 403, que é o que quem integra precisa saber para pedir o acesso certo.
+ *
+ * Lista alternativas, não requisitos somados: basta ter UM dos papéis. O ADMIN
+ * passa em qualquer um, como no RolesGuard.
+ */
+export const SwaggerRoles = (...roles: Role[]) =>
+  applyDecorators(
+    ApiBearerAuth('access-token'),
+    ApiUnauthorizedResponse({
+      description: 'Não autenticado — token ausente ou inválido',
+    }),
+    ApiForbiddenResponse({
+      description:
+        `Acesso negado — requer um destes papéis: ${roles.join(', ')}. ` +
+        'ADMIN passa em qualquer um.',
+    }),
   )
