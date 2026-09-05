@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Exam } from '../entities/exam.entity';
-import { In, QueryFailedError, Repository } from 'typeorm';
+import { In, IsNull, QueryFailedError, Repository } from 'typeorm';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { isValidExam } from './validators/exam.validator';
 import { ExamTemplate } from '../entities/exam-template.entity';
@@ -81,6 +81,9 @@ export class ExamService {
 
   async getByPatientId(patientId: number): Promise<Exam[]> {
     return this.repo.find({
+      // Ver a nota sobre `withDeleted` em `getById`: sem isso, o exame de um
+      // modelo excluído volta sem `examTemplate` e a listagem perde o tipo.
+      withDeleted: true,
       select:{
         id: true,
         date: true,
@@ -99,14 +102,28 @@ export class ExamService {
         preceptor: true,
         examTemplate: true
       },
-      where: { patientId },
+      // `deletedAt: IsNull()` repõe na mão o filtro que `withDeleted` desligou:
+      // exame excluído continua fora da listagem.
+      where: { patientId, deletedAt: IsNull() },
       // Mais recentes primeiro; no empate de data, o lançado por último vem antes.
       order: { date: 'DESC', createdAt: 'DESC' }
     });
   }
 
+  /**
+   * Excluir um modelo (soft delete) tira-o do catálogo, mas não apaga os exames
+   * já lançados com ele — e esses exames continuam dependendo do modelo para
+   * saber schema, material e método. Sem `withDeleted`, o TypeORM acrescenta
+   * `examTemplate.deleted_at IS NULL` à condição do JOIN, o template volta nulo
+   * e o exame fica sem campos. O mesmo vale para preceptor/responsável de um
+   * usuário desativado.
+   *
+   * `withDeleted` vale para a consulta inteira, inclusive para o próprio exame,
+   * então o filtro dele é reposto explicitamente: exame excluído continua 404.
+   */
   async getById(id: number): Promise<Exam | null> {
     const exam = await this.repo.createQueryBuilder("exam")
+    .withDeleted()
     .leftJoin("exam.examTemplate", "examTemplate")
     .select([
       "exam",
@@ -116,7 +133,8 @@ export class ExamService {
       "examTemplate.material",
       "examTemplate.method"
     ])
-    .where({id})
+    .where("exam.id = :id", {id})
+    .andWhere("exam.deletedAt IS NULL")
     .getOne();
 
     if(!exam) throw new NotFoundException("Exam not found");
@@ -125,7 +143,10 @@ export class ExamService {
 
   async getPrivateById(id: number): Promise<Exam | null>{
     const exam = await this.repo.findOne({
-      where:{id},
+      // Mesma razão de `getById`: o modelo (e o usuário) excluído tem de vir
+      // junto, e o filtro do próprio exame volta em `deletedAt: IsNull()`.
+      withDeleted: true,
+      where:{id, deletedAt: IsNull()},
       relations:{
         preceptor: true,
         responsible: true,
@@ -159,7 +180,13 @@ export class ExamService {
     const exam = await this.repo.findOneBy({id});
     if(!exam) throw new NotFoundException('Exam not found');
 
-    const template = await this.templateRepo.findOneBy({id: exam.examTemplateId});
+    // `withDeleted`: o modelo pode ter sido excluído depois do lançamento, e o
+    // schema dele continua sendo o contrato deste exame. Sem isto, editar um
+    // exame de modelo excluído respondia 500.
+    const template = await this.templateRepo.findOne({
+      where: {id: exam.examTemplateId},
+      withDeleted: true,
+    });
     if(!template) throw new InternalServerErrorException("Template not found");
 
     if(dto.data && !isValidExam(dto.data, template.schema)) throw new BadRequestException("The exam does not follow it's schema");
