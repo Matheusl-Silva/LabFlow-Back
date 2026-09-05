@@ -8,6 +8,8 @@ import {
   Delete,
   ConflictException,
   Put,
+  Query,
+  ParseBoolPipe,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { PatientService } from './patient.service';
@@ -65,9 +67,19 @@ export class PatientController {
   async create(
     @Body() dto: CreatePatientDto,
     @UserFromJwt() user: JwtPayload,
+    // Fica na query, e não no corpo: o corpo é o CreatePatientDto, do qual o
+    // UpdatePatientDto herda e que vai direto para o repositório — um campo a
+    // mais ali viraria uma coluna inexistente no UPDATE.
+    //
+    // Falha fechada: o ValidationPipe global (transform: true) já converte a
+    // query em boolean antes deste pipe, e converte QUALQUER coisa que não seja
+    // 'true' em `false`. Ou seja, só `?confirmReturn=true` reativa um cadastro
+    // — um valor torto nunca vira confirmação acidental.
+    @Query('confirmReturn', new ParseBoolPipe({optional: true}))
+    confirmReturn?: boolean,
   ): Promise<Patient> {
     try {
-      return await this.patientService.create(dto, user.id);
+      return await this.patientService.create(dto, user.id, confirmReturn ?? false);
     } catch (err) {
       console.error(err);
       if (err instanceof QueryFailedError && err.driverError.code == '23505') {
