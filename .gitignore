@@ -200,3 +200,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Dumps gerados pelo deploy/atualizar.sh antes de cada atualização
 deploy/backups/
+
+# Grafo de conhecimento gerado pelo graphify
+graphify-out/
