@@ -1,11 +1,21 @@
-import { ConflictException, Injectable, NotFoundException} from "@nestjs/common";
+import { ConflictException, HttpStatus, Injectable, NotFoundException} from "@nestjs/common";
 import { Patient } from "../entities/patient.entity";
 import { Repository } from "typeorm";
+import { Anamnesis } from "../entities/anamnesis.entity";
+import { Exam } from "../entities/exam.entity";
 import { UpdatePatientDto } from "./dto/update-patient.dto";
 import { InjectRepository } from "@nestjs/typeorm";
 import { CreatePatientDto } from "./dto/create-patient.dto";
 import { AuditService } from "../audit/audit.service";
 import { AuditAction, AuditEntity } from "../audit/audit.types";
+
+/**
+ * Marca o 409 de "paciente retornando" — o único conflito de cadastro que o
+ * usuário pode resolver confirmando. O cliente testa este `code`; a mensagem é
+ * texto para humano e pode ser reescrita sem quebrar ninguém.
+ */
+export const PATIENT_RETURNING_CODE = 'PATIENT_RETURNING';
+
 @Injectable()
 export class PatientService{
     constructor(
@@ -60,7 +70,47 @@ export class PatientService{
         return patient;
     }
 
-    async create(dto : CreatePatientDto, userId: number) : Promise<Patient>{
+    /**
+     * Reativar um cadastro excluído é o oposto do que o usuário acha que está
+     * fazendo ao clicar em "Cadastrar": em vez de uma ficha em branco, o
+     * registro antigo volta com o id, os exames e as anamneses dele. Por isso a
+     * primeira tentativa é RECUSADA com este 409 descritivo — o cliente mostra a
+     * confirmação e só então repete a chamada com `confirmReturn`.
+     *
+     * Os totais de exames e anamneses vão junto porque são o que o usuário
+     * precisa saber para decidir: é o histórico que ele vai reencontrar
+     * vinculado ao paciente.
+     */
+    private async returningPatientConflict(deleted: Patient): Promise<ConflictException>{
+        const manager = this.repo.manager;
+        const [exams, anamneses] = await Promise.all([
+            manager.count(Exam, {where: {patientId: deleted.id}}),
+            manager.count(Anamnesis, {where: {patientId: deleted.id}}),
+        ]);
+
+        return new ConflictException({
+            statusCode: HttpStatus.CONFLICT,
+            error: 'Conflict',
+            code: PATIENT_RETURNING_CODE,
+            message:
+                'Já existe um paciente excluído com este CPF. ' +
+                'Confirme o retorno para reativar o cadastro.',
+            patient: {
+                id: deleted.id,
+                name: deleted.name,
+                deletedAt: deleted.deletedAt,
+                examCount: exams,
+                anamnesisCount: anamneses,
+            },
+        });
+    }
+
+    /**
+     * `confirmReturn` só tem efeito quando existe um cadastro excluído com o
+     * mesmo CPF: é o "sim, é a mesma pessoa voltando" vindo da tela. Fora desse
+     * caso o cadastro segue igual, confirmado ou não.
+     */
+    async create(dto : CreatePatientDto, userId: number, confirmReturn = false) : Promise<Patient>{
         // CPF é identidade nacional: mesmo CPF = mesma pessoa. Se já existe um
         // paciente ATIVO com esse CPF, é conflito real. Se existe um paciente
         // EXCLUÍDO (soft delete) com esse CPF, é a mesma pessoa voltando —
@@ -76,6 +126,8 @@ export class PatientService{
         });
 
         if(deleted){
+            if(!confirmReturn) throw await this.returningPatientConflict(deleted);
+
             await this.repo.update(deleted.id, dto); // sobrescreve com os dados do novo cadastro
             await this.repo.restore(deleted.id);     // deleted_at = null (reativa)
             const restored = await this.repo.findOneByOrFail({id: deleted.id});
